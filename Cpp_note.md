@@ -483,6 +483,8 @@ volatile不具备原子性。使用该关键字后，编译器不会对相应的
 
 使用virtual进行修饰的成员函数
 
+virtual告知编译器，这个函数可能会被子类重写
+
 虚函数允许通过积累指针或引用，在运行时调用派生类重写后的函数，从而实现动态多态，以此统一接口和操作
 ``` 
     **动态多态**
@@ -538,4 +540,58 @@ void print(double x);
 删除这个指针时，如果析构函数不是虚函数，那么**编译器实施静态绑定**，删除基类指针时就只会调用基类的析构函数，而不会调用派生类的析构函数，导致资源没有正确释放
 
 将析构函数设为虚函数，删除基类指针时，会先调用派生类析构函数，再调用基类析构函数
+
+```cpp
+class Base {
+public:
+	~Base() {
+		cout << "Base destructor\n";
+	}
+};
+
+class Derived : public Base {
+public:
+	~Derived() {
+		cout << "Derived destructor\n";
+	}
+};
+
+Base* p = new Derived;
+delete p;           // 输出 Base destructor， Derived资源没有释放
+```
+
+在上例中，delete p操作中的p是Base*， 由于析构函数不是虚函数，只会调用 Base::~Base()。导致资源释放不彻底
+
+```cpp
+class Base {
+public:
+	virtual ~Base() {
+		cout << "Base destructor\n";
+	}
+};
+
+class Derived : public Base {
+public:
+	~Derived() {
+		cout << "Derived destructor\n";
+	}
+};
+
+Base* p = new Derived;
+delete p;           
+/**
+* 输出
+* Derived destructor
+* Base destructor
+*/
+```
+
+**构造函数为什么不写作虚函数**
+
+-空间角度
+  - 虚函数对应一个vtable，此vtable存储在对象的内存空间中，如果构造函数是虚函数，需要通过vtable调用。
+  - 可此时对象没有实例化，无法找到vtable
+- 使用角度
+  - 虚函数使得通过父类指针或引用调用它时，能够根据子类调用相应成员函数
+  - 构造函数在创建对象时自动调用，不能通过父类指针或者引用调用
 
