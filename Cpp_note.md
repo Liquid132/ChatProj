@@ -3,6 +3,7 @@
         text-indent: 2em; /* 首行缩进2字符 */
     }
 </style>
+# C++基础
 
 ## 变量作用域与存储类型
 
@@ -842,16 +843,562 @@ char arr[20];
 func(arr);
 ```
 
-在上例中，arr作为C数组
+在上例中，arr作为C风格数组
 - 会退化
 - 无.size()方法
 - 无成员函数
 
 如果是std::array：
 - 不会退化
-- 有.size()方法
+- 有.size()方法(成员函数)
 - STL容器
 
 ---
 
-STL容器本质是class,穿参时传递的是**对象**，而非**数组首地址**
+STL容器本质是**class**,穿参时传递的是**对象**，而非**数组首地址**
+
+```cpp
+void func(char arr[]);
+// 等价于下式
+void func(char* arr);
+// 数组传参会退化
+```
+
+```cpp
+#include <array>
+
+void func(array<int, 20> arr)
+{
+    // std::array是类对象，不是原生数组，不会发生退化
+    cout << arr.size();
+}
+// 形如下式，会在调用时复制整个数组，不推荐
+void func(vector<int> v)；
+// 一般使用：
+void func(const vector<int>& v);
+void func(const array<int,20>& arr);
+// 不拷贝、不退化、可以使用.size()
+```
+
+### explicit
+
+用于声明类构造函数是显式调用而非隐式调用。可以阻止调用构造函数时进行隐式转换。只可用于修饰单参构造函数，因为无参构造函数和多参构造函数本身就是显示调用的，使用 explicit 关键字也没有什么意义
+
+```cpp
+// 隐式转换场景
+#include <iostream>
+using namespace std;
+
+class A {
+public:
+    int var;
+    A(int tmp) {
+        var = tmp;
+    }
+};
+
+int main() {
+    A ex = 10; // 发生了隐式转换
+    return 0;
+}
+```
+
+A ex = 10; 在编译时，进行了隐式转换，将 10 转换成 A 类型的对象，然后将该对象赋值给 ex
+
+```cpp
+// 使用explicit关键字声明
+#include <iostream>
+using namespace std;
+
+class A {
+public:
+    int var;
+    explicit A(int tmp) {
+        var = tmp;
+        cout << var << endl;
+    }
+};
+
+int main() {
+    A ex(100);
+    A ex1 = 10; // error: conversion from 'int' to non-scalar type 'A' requested
+    return 0;
+}
+```
+
+### memcpy函数
+直接操作内存块的二进制数据。它从源地址开始，逐个字节（或按更高效的块）复制数据到目标地址，直到复制完指定的字节数。整个过程不关心数据类型，纯粹按字节搬运，所以复制后目标内存和源内存的二进制内容完全一致，但不会处理像字符串结束符这类特殊情况。
+
+通过std::memcpy或直接memcpy进行调用(需要 `#include <cstring>`).
+**void *memcpy(void *dst, const void *src, size_t size)**
+
+```cpp
+#include <cstring>
+memcpy(dst, src, size);
+// 等价于：for(i=0; i<size; i++) dst[i] = src[i];
+// 完全不检查 src 中是否有 '\0'
+
+// 情况一,size大于src有效长度
+char src[5] = "abc";  // 实际内容: 'a','b','c','\0'，长度4
+char dst[10];
+memcpy(dst, src, 10);  // ❌ 错误！读 src[4]...src[9]
+// 读取超出边界，产生未定义行为
+
+// 情况二,size小于src长度，截断
+char src[] = "hello world";
+char dst[20];
+memcpy(dst, src, 5);  // 只复制 "hello"
+dst[5] = '\0';        // 必须手动加结束符！
+printf("%s", dst);    // 输出 "hello"（否则会乱码）
+```
+
+处理字符串方法，感觉没啥用
+| 函数 | 行为 | 安全性 |
+| :-- | :-- | :-- |
+| memcpy | 精确复制N字节，不关心\0 | 可能需要手动管理边界 |
+| strcpy | 复制直到\0,包括\0 | 可能溢出 |
+| strncpy | 最多N字节，不足补\0,超出不补 | 可能遗漏\0 |
+
+```cpp
+char str[] = "hello";     // 数组版本
+memcpy(buf, str, sizeof(str));  // ✅ 可以，sizeof(str)=6
+```
+```cpp
+char *str = "hello";      // 指针版本  
+memcpy(buf, str, sizeof(str));          // ❌ 错误！sizeof(str)=8（指针大小）
+memcpy(buf, str, strlen(str) + 1);      // ✅ 正确
+memcpy(buf, str, sizeof(str));          // ❌ 复制 8 字节 → 灾难！
+```
+
+### C风格和STL容器
+
+```cpp
+// C风格
+char* str1 = new char[10];
+strcpy(str1, "hello");
+char* str2 = new char[20];
+strcpy(str2, str1);
+strcat(str2, " world");  // 必须保证空间足够
+delete[] str1;
+delete[] str2;            // 容易忘记释放
+```
+
+```cpp
+// STL容器，安全简洁
+std::string str1 = "hello";
+std::string str2 = str1;        // 自动拷贝
+str2 += " world";                // 自动扩容
+// 无需手动释放
+```
+
+| 方面 | C风格字符串 char* | STL容器 std::string |
+| :-- | :--| :-- |
+| 内存管理 | 手动new/delete或静态数组 | 自动管理，RAII原则 |
+| 边界安全 | 容易越界、缓冲区溢出 | 自动扩容、边界检查 |
+| 拷贝、赋值 | 手动strcpy/memcpy | 支持'='直接估值 |
+|字符串拼接 | strcat，容易出错 | +或+=，安全直观 |
+|获取长度 | O(n)遍历（strlen） | O(1)返回（.size()） |
+|空值安全 | 野指针、空指针崩溃 | 存在明确状态（空字符串） |
+|算法配合 | 不直接支持 | 支持STL算法 |
+
+# C++编译
+
+C++的编译过程经过了预处理、编译、汇编和链接四个主要阶段
+
+- **预处理**
+    对源代码进行处理，主要包括展开宏定义、处理条件编译指令（如#include、#define、#ifdef等）以及删除注释等。预处理的结果是生成一个经过宏展开和条件处理后的纯C++源代码文件。
+- **编译**
+    将预处理后的源代码翻译为汇编语言，生成汇编代码。编译器会进行词法分析、语法分析和语义分析，检查代码的正确性，并生成中间代码表示。
+- **汇编**
+    将汇编代码转换为机器可以执行的目标文件。汇编器会将汇编代码转化为机器指令，并生成与机器硬件平台相关的目标文件（通常以".obj"或".o"为扩展名）
+- **链接**
+    将目标文件与其他必要的库文件链接在一起，生成可执行程序。链接器会解析目标文件中的符号引用，将其与其他目标文件或库文件中的符号定义进行匹配，最终生成一个完整的可执行文件。在链接阶段，还会进行地址重定位、符号解析、符号表生成等操作，确保程序的正确执行
+
+### 静态链接库、动态链接库
+- **连接方式** 
+    静态链接库在编译链接时会被完整地复制到可执行文件中，成为可执行文件的一部分；而动态链接库在编译链接时只会在可执行文件中包含对库的引用，实际的库文件在运行时由操作系统动态加载。
+- **文件大小**
+    静态链接库代码被完整幅值到可执行文件中，使文件大小增加；
+    动态链接库不增加可执行文件大小，库的代码只有在运行时才会加载
+- **内存占用**
+    静态链接库在运行时会被完整地加载到内存中，占用固定的内存空间；
+    动态链接库在运行时才会被加载，可以在多个进程之间共享，减少内存占用。
+- **可拓展性**
+    动态链接库的可扩展性更好，可以在不修改可执行文件的情况下替换或添加新的库文件；
+    静态链接库需要重新编译链接。
+
+---
+
+| 特性 | 静态链接库 | 动态链接库 |
+|:---|:---|:---|
+| **文件后缀** | Windows: `.lib`<br>Linux: `.a` | Windows: `.dll`<br>Linux: `.so`<br>macOS: `.dylib` |
+| **链接时机** | 编译链接阶段，代码被复制进最终程序 | 运行时加载 |
+| **最终产物** | 一个独立的大体积可执行文件 | 小体积可执行文件 + 若干依赖库 |
+| **内存占用** | 高（多程序重复拷贝） | 低（多程序共享内存） |
+| **库更新** | 需重新编译整个程序 | 只需替换库文件 |
+
+---
+
+**静态库**
+1. 有一个静态库文件 `MathLib.lib`,其中包含了add函数
+2. 编译主程序main.exe时，链接器将add函数机械码拷贝到main.exe中
+3. 把这个 `main.exe` 发给其他设备，直接能运行。缺点是文件体积大，如果 add 函数发现算错了，需要重新编译整个 main.exe 发发送。
+```cpp
+// main.cpp
+#include <iostream>
+// 假设静态库里就是这个函数,位于MathLib.lib中而非main函数中
+// int add(int a, int b) { return a + b; }
+
+int main() {
+    std::cout << add(3, 5) << std::endl;
+    // 此时的 add 代码已经完整躺在 main.exe 里了
+    return 0;
+}
+```
+
+**动态库**
+1. 编译一个 MathLib.dll 文件（动态库），里面也有 add 函数。
+2. 编译主程序 main.exe 时，链接器不复制代码，而是记录一个标记：“我要用 MathLib.dll 里的 add 函数”
+3. 运行 main.exe 时，Windows 系统会做两件事：
+   - 在 main.exe 所在目录查找 MathLib.dll；
+   - 如果找到了，就把 MathLib.dll 加载进内存，把 add 函数的地址告诉 main.exe，然后程序开始执行。
+4. 发程序时，必须同时给 main.exe 和 MathLib.dll 两个文件（或者让程序从网上下载）。但如果 add 函数升级了，你可以只发一个新的 MathLib.dll 给他，main.exe 不用动。
+
+```cpp
+// main.cpp
+#include <iostream>
+// 只是声明有这个函数，但不提供实现（实现在 dll 里）
+extern "C" __declspec(dllimport) int add(int a, int b);
+
+int main() {
+    std::cout << add(3, 5) << std::endl;
+    // 此时 main.exe 不知道 add 的机器码，只知道“去 MathLib.dll 里找”
+    return 0;
+}
+```
+
+# 面向对象的C++
+
+**面向对象：** 对象是指具体的某一个事物，这些事物的抽象就是类，类中包含数据（成员变量）和动作（成员方法）
+- **封装**
+    - 将具体的实现过程和数据封装成一个函数，只能通过接口进行访问，降低耦合性
+- **继承**
+    - 子类继承父类的特征和行为，子类有父类的非 `private` 方法或成员变量，子类可以对父类的方法进行重写，增强了类之间的耦合性
+    - 但是当父类中的成员变量、成员函数或者类本身被 `final` 关键字修饰时，修饰的类不能继承，修饰的成员不能重写或修改
+- **多态**
+    - 不同继承类的对象，对同一消息做出不同的响应，基类的指针指向或绑定到派生类的对象，使得基类指针呈现不同的表现方式
+
+### C++ 特性介绍
+
+**封装**是将一些数据和函数封装到类中，这样外层调用类只会调用到设计者想让他调用的方法
+
+**继承**通常是设计一个基类，然后分别设置子类去继承基类的一些方法，尤其是虚函数，针对不同子类的特点对虚函数进行重写
+
+**公有继承**是将基类的成员都原封不动的继承下来，**私有继承**则会将其改为私有部分
+
+**多态**是有函数重载和之前提到的虚函数，函数重载是可以使得相同的函数面对不同的参数个数或者类型进行不同的方式实现
+
+### 如何理解C++是面向对象编程
+```
+结合项目经历展开解释，举例子，对比面向过程编程
+```
+
+**面向过程编程**
+
+一种以执行程序操作的过程或函数为中心编写软件的方法。
+
+程序的数据通常存储在变量中，与这些过程是分开的。所以必须将变量传递给需要使用它们的函数。
+
+缺点：随着程序变得越来越复杂，程序数据与运行代码的分离可能会导致问题。例如，程序的规范经常会发生变化，从而需要更改数据的格式或数据结构的设计。当数据结构发生变化时，对数据进行操作的代码也必须更改为接受新的格式。查找需要更改的所有代码会为程序员带来额外的工作，并增加了使代码出现错误的机会
+
+**面向对象编程**
+
+以创建和使用对象为中心。
+
+一个对象（Object）就是一个软件实体，它将数据和程序在一个单元中组合起来。对象的数据项，也称为其属性，存储在成员变量中。对象执行的过程被称为其成员函数。将对象的数据和过程绑定在一起则被称为封装。
+
+| 维度 | 面向过程 | 面向对象 |
+| :-- | :-- | :-- |
+| 关注点 | 步骤实现 | 参与对象 |
+| 组织单位 | 函数 | 对象(类) |
+| 数据处理 | 分离（数据传给函数） | 绑定（对象具备自己的方法）|
+| 代码复用 | 函数复用 | 继承+多态+封装 |
+| 简单表述 | 以函数为中心，数据作为参数在函数间传递 | 以对象为中心，将数据和行为封装在一起，通过对象间的协作解决问题 |
+
+面向过程：数据是被动的 
+```c
+// 数据是个结构体，本身"不会动"
+struct Student {
+    char name[50];
+    int score;
+};
+
+// 函数在外面"操作"数据
+void printScore(Student* s) {
+    printf("%s: %d", s->name, s->score);
+}
+```
+
+```c
+// 数据和处理分离
+double calculateArea(double radius) {
+    return 3.14159 * radius * radius;
+}
+
+int main() {
+    double r = 5.0;
+    printf("面积: %f", calculateArea(r));
+}
+```
+
+面向对象：数据主动
+```cpp
+class Student {
+private:
+    string name;
+    int score;
+public:
+    void printScore() {  // 对象自己知道怎么打印
+        cout << name << ": " << score;
+    }
+};
+// 调用时：student.printScore();  // 对象自己做事
+```
+
+```cpp
+// 数据和方法绑定在一起
+class Circle {
+private:
+    double radius;
+public:
+    Circle(double r) : radius(r) {}
+    double getArea() {  // 圆自己知道怎么算面积
+        return 3.14159 * radius * radius;
+    }
+};
+
+int main() {
+    Circle c(5.0);
+    cout << "面积: " << c.getArea();
+}
+```
+
+### 重写、重载、隐藏
+
+**重载** 根据参数列表确定调用哪个函数，不关心函数返回类型
+
+```cpp
+class A {
+public:
+    void fun(int tmp);
+    void fun(float tmp);        // 重载 参数类型不同（相对于上一个函数）
+    void fun(int tmp, float tmp1); // 重载 参数个数不同（相对于上一个函数）
+    void fun(float tmp, int tmp1); // 重载 参数顺序不同（相对于上一个函数）
+    int fun(int tmp);            // error: 'int A::fun(int)' cannot be overloaded 错误：注意重载不关心函数返回类型
+};
+```
+
+**重写（覆盖）** 派生类中重新定义的函数
+
+函数名、参数列表、返回值类型都必须同基类中被重写的函数一致，只有函数体不同。派生类调用时会调用派生类的重写函数，不会调用被重写函数。重写的基类中被重写的函数必须有 virtual 修饰。
+
+```cpp
+#include <iostream>
+using namespace std;
+
+class Base {
+public:
+    virtual void fun(int tmp) {
+        cout << "Base::fun(int tmp) : " << tmp << endl;
+    }
+};
+
+class Derived : public Base {
+public:
+    virtual void fun(int tmp) {
+        cout << "Derived::fun(int tmp) : " << tmp << endl;
+    } // 重写基类中的 fun 函数
+};
+
+int main() {
+    Base *p = new Derived();
+    p->fun(3); // Derived::fun(int) : 3
+    return 0;
+}
+```
+
+**隐藏** 派生类的函数屏蔽了与其同名的基类函数，主要只要同名函数，不管参数列表是否相同，基类函数都会被隐藏
+
+```cpp
+#include <iostream>
+using namespace std;
+
+class Base {
+public:
+    void fun(int tmp, float tmp1) {
+        cout << "Base::fun(int tmp, float tmp1)" << endl;
+    }
+};
+
+class Derive : public Base {
+public:
+    void fun(int tmp) {
+        cout << "Derive::fun(int tmp)" << endl;
+    } // 隐藏基类中的同名函数
+};
+
+int main() {
+    Derive ex;
+    ex.fun(1);       // Derive::fun(int tmp)
+    ex.fun(1, 0.01); // error: candidate expects 1 argument, 2 provided
+    return 0;
+}
+```
+
+上述代码中 ex.fun(1, 0.01); 出现错误，说明派生类中将基类的同名函数隐藏了。若是想调用基类中的同名函数，可以加上类型名指明 ex.Base::fun(1, 0.01);，这样就可以调用基类中的同名函数
+
+**只要子类定义了同名函数（无论参数是否相同），就会隐藏父类的所有同名函数，与是否为虚函数无关**
+
+| 特性 | 重写 | 隐藏 |
+| :-- | :-- | :-- |
+| 函数签名 | 必须完全相同 | 可以不同（同名即可） |
+| 是否需要virtual | 基类需要声明virutal | 不需要 | 
+| 多态行为 | 支持（父类指针调用子类版本） | 不支持 |
+| 作用域 | 子类替换父类实现 | 子类屏蔽父类**所有**同名函数 |
+
+```cpp
+class Base {
+public:
+    virtual void foo(int x) { }      // 虚函数
+    void bar(int x) { }              // 非虚函数
+    void bar(double x) { }           // 重载
+};
+
+class Derived : public Base {
+public:
+    // 重写：签名相同 + 基类 virtual
+    virtual void foo(int x) override { }  // ✅ 重写
+    
+    // 隐藏：同名即隐藏（不管参数）
+    void bar(int x) { }                   // 隐藏了 Base 中的所有 bar
+    // 结果：Base::bar(double) 也被隐藏了！
+};
+```
+
+想要调用被隐藏的父类函数，可以使用作用域解析符`::`
+```cpp
+int main() {
+    Derive ex;
+    
+    ex.fun(1);                    // 调用子类版本
+    ex.Base::fun(1, 0.01);        // ✅ 显式调用父类版本
+    ex.Base::fun(1);              // ✅ 如果父类有这个重载版本
+    
+    return 0;
+}
+```
+
+使用`using`避免隐藏
+
+```cpp 
+class Derive : public Base {
+public:
+    using Base::fun;  // 把 Base 中的所有 fun 引入当前作用域
+    void fun(int tmp) { }  // 现在不会隐藏，而是重载
+};
+
+int main() {
+    Derive ex;
+    ex.fun(1);           // ✅ 调用子类版本
+    ex.fun(1, 0.01);     // ✅ 调用父类版本（因为 using 引入了）
+}
+```
+
+---
+
+| 特性 | 重写 (Override) | 重载 (Overload) | 隐藏 (Hide) |
+|------|----------------|----------------|-------------|
+| **发生范围** | 基类与派生类之间 | **同一类**内部 | 基类与派生类之间 |
+| **函数名** | **相同** | **相同** | **相同** |
+| **参数列表** | **必须相同** | **必须不同**（类型/个数/顺序） | **可以相同或不同** |
+| **返回类型** | 相同或协变（子类指针/引用） | 可以不同 | 可以不同 |
+| **virtual 要求** | **基类必须加 `virtual`** | 不需要 | 不需要 |
+| **作用域** | 不同类（父子关系） | 同一个类 | 不同类（父子关系） |
+| **编译时/运行时** | **运行时**决定（动态绑定） | **编译时**决定（静态绑定） | **编译时**决定（静态绑定） |
+| **典型用途** | 实现多态，子类替换父类行为 | 提供同一操作的不同参数版本 | 子类屏蔽父类接口（应尽量避免） |
+
+---
+
+**编译时多态、运行时多态**
+
+- **编译时多态** 主要通过函数重载和模板实现
+    编译器在编译时，就能算出要调用的具体是哪个函数，直接把地址写死在代码里
+    
+**函数重载**
+
+```cpp
+class Calculator {
+public:
+    int add(int a, int b) { return a + b; }        // 整数加法
+    double add(double a, double b) { return a + b; } // 浮点数加法
+};
+
+int main() {
+    Calculator calc;
+    // 编译器在编译这行时就知道：参数是整数，所以调用 int add(int,int)
+    cout << calc.add(3, 5);     
+    // 编译器在编译这行时就知道：参数是浮点数，所以调用 double add(double,double)
+    cout << calc.add(3.14, 2.86); 
+}
+```
+    在编译出的代码里，对 add 的调用已经变成了两个不同的函数地址。这就好像代码里直接写了 add_int_int 和 add_double_double
+
+**模板**
+
+```cpp
+template <typename T>
+T max(T a, T b) {
+    return a > b ? a : b;
+}
+
+int main() {
+    // 编译器看到这，会生成一个 int 版本的 max 函数，然后调用它
+    cout << max(3, 5);    
+    // 编译器看到这，会生成一个 double 版本的 max 函数，然后调用它
+    cout << max(3.14, 2.86);
+}
+```
+- **运行时多态** 主要通过虚函数和继承实现
+
+代码在运行时，根据对象的实际类型决定调用哪个函数
+
+```cpp
+class Animal {
+public:
+    // 加了 virtual，就是虚函数了
+    virtual void speak() { cout << "动物叫" << endl; }
+};
+
+class Dog : public Animal {
+public:
+    void speak() override { cout << "汪汪" << endl; }
+};
+
+class Cat : public Animal {
+public:
+    void speak() override { cout << "喵喵" << endl; }
+};
+
+// 一个通用的函数，它不关心你传进来的是 Dog 还是 Cat
+void letAnimalSpeak(Animal *animal) {
+    animal->speak(); // 关键在这一行：编译时不知道会调用谁
+}
+
+int main() {
+    Dog dog;
+    Cat cat;
+
+    letAnimalSpeak(&dog); // 运行时，发现 animal 实际指向 Dog，所以调用 Dog::speak
+    letAnimalSpeak(&cat); // 运行时，发现 animal 实际指向 Cat，所以调用 Cat::speak
+}
+```
