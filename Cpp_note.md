@@ -1356,7 +1356,7 @@ int main() {
 }
 ```
 
-**隐藏** 派生类的函数屏蔽了与其同名的基类函数，主要只要同名函数，不管参数列表是否相同，基类函数都会被隐藏
+**隐藏** 派生类的函数屏蔽了与其同名的基类函数，只要是同名函数，不管参数列表是否相同，基类函数都会被隐藏
 
 ```cpp
 #include <iostream>
@@ -1532,3 +1532,488 @@ int main() {
     letAnimalSpeak(&cat); // 运行时，发现 animal 实际指向 Cat，所以调用 Cat::speak
 }
 ```
+
+### 函数对象
+
+函数对象是指一个重载了 operator() 的类或结构体实例。函数对象可以像普通函数一样被调用，但它们实际上是对象，具有状态和行为。`operator` 关键字用于重载运算符
+
+```cpp
+class Vector {
+public:
+    int x, y;
+    Vector(int x, int y) : x(x), y(y) {}
+
+    // 重载 + 运算符
+    Vector operator+(const Vector& other) const {
+        return Vector(this->x + other.x, this->y + other.y);
+    }
+};
+
+int main() {
+    Vector v1(1, 2), v2(3, 4);
+    Vector v3 = v1 + v2; // 优雅，直观！
+    // 上面这行等价于: v1.operator+(v2);
+    return 0;
+}
+```
+
+一个类如果重载了`()`，则它的实例可以像函数一样被调用
+
+```cpp
+#include <iostream>
+
+// 1. 定义一个类，并重载 operator()
+class Adder {
+public:
+    // operator() 可以接收参数并返回值
+    int operator()(int a, int b) const {
+        return a + b;
+    }
+};
+
+int main() {
+    // 2. 创建这个类的实例（对象）
+    Adder myAdder;
+
+    // 3. 像使用函数一样使用这个对象
+    int result = myAdder(3, 5); 
+    // 上面这行等价于: myAdder.operator()(3, 5);
+
+    std::cout << result << std::endl; // 输出 8
+    return 0;
+}
+```
+
+在上例中，const修饰成员函数本省，承诺该成员函数不会修改任何成员变量
+
+```cpp
+class Counter {
+private:
+    int count = 0;  // 成员变量
+public:
+    // ❌ 错误：const 函数不能修改成员变量
+    void increment() const {
+        count++;  // 编译错误！不能修改 count
+    }
+    
+    // ✅ 正确：非 const 函数可以修改
+    void increment() {
+        count++;
+    }
+    
+    // ✅ 正确：const 函数只能读取，不能修改
+    int getCount() const {
+        return count;  // 允许读取
+    }
+};
+```
+
+| `const`位置 | 修饰对象 | 示例 |
+| :-- | :-- | :-- |
+| 函数参数 | 参数本身不能修改 | `void func(const int x)` |
+| 函数返回值 | 返回值为`const` | `const int func()` |
+| 函数末尾 | 成员对象不可修改 | `void func() const` |
+|成员变量 | 成员变量初始化后无法修改 | `const int maxsize = 100` |
+
+# 类
+
+class中缺省[构造函数、析构函数、拷贝构造函数、赋值运算符重载函数]，如果一个类没有显式定义它们，则编译器会自动生成这些函数
+
+### 纯虚函数
+
+纯虚函数是在基类中声明的虚函数，且没有在积累中定义。它要求任何派生类都定义自己的实现方法，声明形式如下：
+
+```cpp
+virtual void funtion() = 0;
+```
+
+其中` = 0 `为纯虚函数标识。含有纯虚函数的类被称作**抽象类**，抽象类无法被实例化，只能作为接口使用。
+
+派生类必须实现所有的纯虚函数，否则该派生类也会变成抽象类。
+
+纯虚函数应用场景 
+
+- 设计模式：例如在模板方法模式中，基类定义一个算法的骨架，而将一些步骤延迟到子类中实现。这些需要在子类中实现的步骤就可以声明为纯虚函数。
+- 接口定义：可以创建一个只包含纯虚函数的抽象类作为接口。所有实现该接口的类都必须提供这些函数的实现。
+
+**虚函数和纯虚函数**
+
+- 虚函数可以直接使用，纯虚函数需要再派生类中实现后使用
+- 虚函数定义时在普通函数基础上加上`virtual`关键字；纯虚函数还需要再末尾加上` = 0`
+- 虚函数必须实现，不然编译器报错
+- 对于**实现纯虚函数**的派生类，纯虚函数在该类中被称为虚函数，虚函数和纯虚函数均可再派生类中重写
+
+```cpp
+#include <iostream>
+using namespace std;
+
+class A
+{
+public:
+    virtual void v_fun() // 虚函数
+    {
+        cout << "A::v_fun()" << endl;
+    }
+};
+class B : public A
+{
+public:
+    void v_fun()
+    {
+        cout << "B::v_fun()" << endl;
+    }
+};
+int main()
+{
+    A *p = new B();
+    p->v_fun(); // B::v_fun()
+    return 0;
+}
+```
+| 误区 | 纠错 |
+| :-- | :-- |
+| "抽象类不能有任何实现" | ❌ 抽象类可以有普通函数和 `/n`已实现的虚函数 |
+| "抽象类所有函数都是纯虚的" | ❌ 只需要至少一个纯虚函数 |
+| "抽象类不能有构造函数" | ❌ 抽象类可以有构造函数（用于子类初始化） |
+| "抽象类不能有成员变量" | ❌ 抽象类可以有成员变量 |
+
+抽象类完整示例如下 
+
+```cpp 
+#include <iostream>
+using namespace std;
+
+class Shape {
+private:
+    string color;  // ✅ 可以有成员变量
+    
+public:
+    // 构造函数（抽象类可以有构造函数）
+    Shape(const string& c) : color(c) {}
+    
+    // 纯虚函数
+    virtual double getArea() const = 0;
+    
+    // 普通函数（已实现）
+    string getColor() const {
+        return color;
+    }
+    
+    // 虚函数（已实现，子类可选择是否重写）
+    virtual void display() const {
+        cout << "This is a shape" << endl;
+    }
+    
+    // 虚析构函数（重要！）
+    virtual ~Shape() {}
+};
+
+// 子类必须实现纯虚函数
+class Circle : public Shape {
+private:
+    double radius;
+    
+public:
+    Circle(const string& c, double r) : Shape(c), radius(r) {}
+    
+    // 必须实现 getArea
+    double getArea() const override {
+        return 3.14159 * radius * radius;
+    }
+    
+    // 可以重写 display（可选）
+    void display() const override {
+        cout << "This is a circle" << endl;
+    }
+};
+
+int main() {
+    // Shape s;  // ❌ 错误：不能实例化抽象类
+    
+    Circle c("red", 5.0);
+    cout << "Color: " << c.getColor() << endl;    // ✅ 继承自抽象类
+    cout << "Area: " << c.getArea() << endl;      // ✅ 子类实现
+    c.display();                                   // ✅ 子类重写
+    
+    // 多态使用
+    Shape* ptr = new Circle("blue", 3.0);
+    cout << ptr->getArea() << endl;  // 调用 Circle 的版本
+    delete ptr;
+    
+    return 0;
+}
+```
+
+### virtual的传染性
+
+一旦某个函数在继承体系的任意一个上层被声明为 virtual，它向下传递时永远保持虚函数特性，无论中间派生类是否写了 virtual 关键字
+
+```cpp
+#include <iostream>
+using namespace std;
+
+class Grand {
+public:
+    virtual void func() {  // 祖父类声明为 virtual
+        cout << "Grand::func" << endl;
+    }
+};
+
+class Parent : public Grand {
+public:
+    // 注意：这里没有写 virtual
+    void func() override {  // 但仍然是虚函数
+        cout << "Parent::func" << endl;
+    }
+};
+
+class Child : public Parent {
+public:
+    // 注意：这里也没有写 virtual
+    void func() override {  // 仍然是虚函数
+        cout << "Child::func" << endl;
+    }
+};
+
+int main() {
+    Grand* p;
+    
+    p = new Parent();
+    p->func();  // 输出：Parent::func（多态生效）
+    
+    p = new Child();
+    p->func();  // 输出：Child::func（多态生效）
+    
+    return 0;
+}
+```
+
+### override关键字
+
+C++11引入，建议在派生类中使用override
+
+```cpp
+class Base {
+public:
+    virtual void func() { }
+};
+
+class Derived : public Base {
+public:
+    void func(int x) { }  // 不小心写错了参数，本想重写但变成了一个新函数
+};
+
+int main() {
+    Base* p = new Derived();
+    p->func();   // 调用的是 Base::func，不是 Derived 的！
+    // 因为没有成功重写，多态失效了
+}
+
+// 使用override情况
+// class Derived : public Base {
+// public:
+//     void func(int x) override { }  // ❌ 编译错误！
+//     // 错误：Derived::func(int) 并没有重写 Base::func()
+// };
+```
+override只是检查关键字，每个派生类需要单独重写override
+
+| 特性 |	virtual	| override |
+| :-- | :-- | :-- |
+| 作用	| 声明函数为虚函数 | 检查是否成功重写 |
+| 是否必需 |	基类中必需，派生类可选可选，但强烈推荐 | 
+| 是否传递	| ✅ 自动向下传递 | ❌ 每个派生类需要单独写 | 
+| 编译检查	| 无（只是声明） | 有（检查是否真的重写） | 
+| 影响多态	| 是（开启多态） | 否（只是检查） |
+
+virtual的使用和override不冲突，使用override定义的派生类依旧是相同签名的函数，使用override不会丢失virtual的传递性
+
+丢失虚函数特性的唯一可能：派生类定义了一个**不同签名**的同名函数，那是一个新函数，不是重写
+```cpp
+class Base {
+public:
+    virtual void func(int x) { }  // 参数为 int
+};
+
+class Derived : public Base {
+public:
+    void func(double x) { }  // 参数为 double → 这是新函数，不是重写
+};
+
+int main() {
+    Base* p = new Derived();
+    p->func(3);     // 调用 Base::func(int)，Derived 的版本没被调用
+    // 因为参数类型不同，没有重写
+}
+```
+
+### 虚函数实现机制
+
+虚函数通过虚函数表来实现。虚函数的地址保存在虚函数表中，在类的对象所在的内存空间中，保存了指向虚函数表的指针（称为“虚表指针”），通过虚表指针可以找到类对应的虚函数表。虚函数表解决了基类和派生类的继承问题和类中成员函数的覆盖问题，当用基类的指针来操作一个派生类的时候，这张虚函数表就指明了实际应该调用的函数
+
+**虚函数表**和**类**绑定，**虚表指针**和**对象**绑定。即类的不同的对象的虚函数表是一样的，但是每个对象都有自己的虚表指针，来指向类的虚函数表
+
+- 虚函数表存放内容：类的虚函数地址
+- 虚函数表建立时间：编译阶段，程序编译过程中会将虚函数地址放到虚函数表中
+- 虚表指针存放位置：对象内存空间中最前位置，确保正确取到虚函数偏移量
+
+编译器处理虚函数表
+- 编译器将虚函数表的指针放在类的实例对象的内存空间中，该对象调用该类的虚函数时，通过指针找到虚函数表，根据虚函数表中存放的虚函数的地址找到对应的虚函数。
+- 如果派生类没有重新定义基类的虚函数 A，则派生类的虚函数表中保存的是基类的虚函数 A 的地址，也就是说基类和派生类的虚函数 A 的地址是一样的。
+- 如果派生类重写了基类的某个虚函数 B，则派生的虚函数表中保存的是重写后的虚函数 B 的地址，也就是说虚函数 B 有两个版本，分别存放在基类和派生类的虚函数表中。
+- 如果派生类重新定义了新的虚函数 C，派生类的虚函数表保存新的虚函数 C 的地址。
+
+**单继承无虚函数覆盖**：
+```cpp
+#include <iostream>
+using namespace std;
+
+class Base
+{
+public:
+    virtual void B_fun1() { cout << "Base::B_fun1()" << endl; }
+    virtual void B_fun2() { cout << "Base::B_fun2()" << endl; }
+    virtual void B_fun3() { cout << "Base::B_fun3()" << endl; }
+};
+
+class Derive : public Base
+{
+public:
+    virtual void D_fun1() { cout << "Derive::D_fun1()" << endl; }
+    virtual void D_fun2() { cout << "Derive::D_fun2()" << endl; }
+    virtual void D_fun3() { cout << "Derive::D_fun3()" << endl; }
+};
+int main()
+{
+    Base *p = new Derive();
+    p->B_fun1(); // Base::B_fun1()
+    return 0;
+}
+```
+
+基类对象对应虚函数表存放：`Base::B_fun1()` `Base::B_fun2()` `Base::B_fun3()`
+派生类对象对应虚函数表存放：`Base::B_fun1()` `Base::B_fun2()` `Base::B_fun3()` `Derive::D_fun1()` `Derive::D_fun2()` `Derive::D_fun3()`
+
+**单继承有虚函数覆盖**
+
+```cpp
+#include <iostream>
+using namespace std;
+
+class Base
+{
+public:
+    virtual void fun1() { cout << "Base::fun1()" << endl; }
+    virtual void B_fun2() { cout << "Base::B_fun2()" << endl; }
+    virtual void B_fun3() { cout << "Base::B_fun3()" << endl; }
+};
+
+class Derive : public Base
+{
+public:
+    virtual void fun1() { cout << "Derive::fun1()" << endl; }
+    virtual void D_fun2() { cout << "Derive::D_fun2()" << endl; }
+    virtual void D_fun3() { cout << "Derive::D_fun3()" << endl; }
+};
+int main()
+{
+    Base *p = new Derive();
+    p->fun1(); // Derive::fun1()
+    return 0;
+}
+```
+
+派生类对象对应虚函数表存放：`Base::B_fun2()` `Base::B_fun3()` `Derive::fun1()` `Derive::D_fun2()` `Derive::D_fun3()`
+
+**多继承无虚函数覆盖**
+
+```cpp
+#include <iostream>
+using namespace std;
+
+class Base1
+{
+public:
+    virtual void B1_fun1() { cout << "Base1::B1_fun1()" << endl; }
+    virtual void B1_fun2() { cout << "Base1::B1_fun2()" << endl; }
+    virtual void B1_fun3() { cout << "Base1::B1_fun3()" << endl; }
+};
+class Base2
+{
+public:
+    virtual void B2_fun1() { cout << "Base2::B2_fun1()" << endl; }
+    virtual void B2_fun2() { cout << "Base2::B2_fun2()" << endl; }
+    virtual void B2_fun3() { cout << "Base2::B2_fun3()" << endl; }
+};
+class Base3
+{
+public:
+    virtual void B3_fun1() { cout << "Base3::B3_fun1()" << endl; }
+    virtual void B3_fun2() { cout << "Base3::B3_fun2()" << endl; }
+    virtual void B3_fun3() { cout << "Base3::B3_fun3()" << endl; }
+};
+
+class Derive : public Base1, public Base2, public Base3
+{
+public:
+    virtual void D_fun1() { cout << "Derive::D_fun1()" << endl; }
+    virtual void D_fun2() { cout << "Derive::D_fun2()" << endl; }
+    virtual void D_fun3() { cout << "Derive::D_fun3()" << endl; }
+};
+
+int main(){
+    Base1 *p = new Derive();
+    p->B1_fun1(); // Base1::B1_fun1()
+    return 0;
+}
+```
+
+派生类虚函数表中，使用三个内存块存放虚函数表，基类的顺序和生命顺序一致
+- 虚函数表`Base1`存放:`Base1::B1_fun1()` `Base1::B1_fun2()` `Base1::B1_fun3()` `Derive::D_fun1()` `Derive::D_fun2()` `Derive::D_fun3()`
+- 虚函数表`Base2`存放：`Base2::B2_fun1()` `Base2::B2_fun2()` `Base2::B2_fun3()`
+- 虚函数表`Base3`存放：`Base3::B3_fun1()` `Base3::B2_fun2()` `Base3::B3_fun3()`
+
+多继承有虚函数覆盖参考单继承
+
+**C++空类大小：** 1字节。C++ 规定，任何对象都必须有一个唯一的内存地址。如果空类大小为 0，那么当创建这个类的多个对象时，它们会共享同一个地址，这违反了 “每个对象地址唯一” 的规则
+
+```cpp
+class A {};
+int main(){
+  cout<<sizeof(A)<<endl;// 输出 1;
+  A a; 
+  cout<<sizeof(a)<<endl;// 输出 1;
+  return 0;
+}
+```
+
+含有虚函数的类对象里都会被编译器隐式插入一个虚函数表指针（教学上常记为 __vptr，但它不是 C++ 标准规定的名字，只是主流编译器的内部实现约定）。它的大小等于平台上的指针大小：32 位机器上是 4 字节，64 位机器上是 8 字节
+
+```cpp
+class A { virtual Fun(){} };
+int main(){
+  cout<<sizeof(A)<<endl;// 输出 4(32位机器)/8(64位机器);
+  A a; 
+  cout<<sizeof(a)<<endl;// 输出 4(32位机器)/8(64位机器);
+  return 0;
+}
+```
+
+静态成员存放在静态存储区，不占用类的大小, 普通函数也不占用类内大小，它们存放在代码段
+对象本身存放在栈、堆或静态存储区
+┌─────────────────────────────────┐ 高地址
+│           栈 (Stack)            │ ← 局部变量、函数调用帧
+├─────────────────────────────────┤
+│            堆 (Heap)            │ ← 动态分配（new/malloc）
+├─────────────────────────────────┤
+│      静态存储区 (Data Segment)   │ ← 全局变量、静态成员、静态局部变量
+│   ├─ 已初始化数据 (.data)         │
+│   └─ 未初始化数据 (.bss)          │
+├─────────────────────────────────┤
+│      代码段 (Code/Text Segment) │ ← 所有函数的机器码（普通函数、成员函数、静态函数）
+└─────────────────────────────────┘ 低地址
+
+在64位系统中，指针占用8字节，`int`类型为了保持兼容、效率，依然使用32位，即4字节。
+类的大小考虑其非静态成员变量的大小之和（考虑内存对齐），和系统位宽没有直接关系
+
+# C++语言特性
