@@ -770,6 +770,11 @@ cout << *(int*)p << endl;
 ```
 现在更多使用模板template<typename T>来替代void*
 
+**模板**是 C++ 实现泛型编程的核心工具。它的本质是：让代码在编译时根据你提供的类型“自动生成”不同版本的函数或类，从而避免为每种数据类型重复写相似的代码。
+
+---
+*函数模板*
+
 ```cpp
 // 求最大值函数
 int Max(int a, int b)
@@ -804,6 +809,130 @@ public:
 };
 Pair<int,string> p;
 ```
+---
+*类模板*
+
+```cpp
+template <typename T>
+class Box {
+private:
+    T content;
+public:
+    void set(const T& item) {
+        content = item;
+    }
+    T get() const {
+        return content;
+    }
+};
+
+int main() {
+    Box<int> intBox;   // 实例化一个装 int 的 Box 类
+    intBox.set(123);
+    std::cout << intBox.get() << std::endl; // 输出 123
+
+    Box<std::string> strBox; // 实例化一个装 string 的 Box 类
+    strBox.set("Hello Templates");
+    std::cout << strBox.get() << std::endl; // 输出 Hello Templates
+
+    return 0;
+}
+```
+---
+*模板特化*
+
+有时，对于某些特定的数据类型，通用模板的逻辑并不适用。比如，你写了一个通用的排序模板，但对于 const char* 类型，你想用特殊的字符串比较逻辑。这时，你可以为特定类型提供一个“特化版本”。
+
+```cpp
+#include <iostream>
+#include <cstring>
+
+template <typename T>
+T max(T a, T b) {
+    std::cout << "通用版本: ";
+    return (a > b) ? a : b;
+}
+
+// 为 const char* 类型提供特化版本
+template <>
+const char* max<const char*>(const char* a, const char* b) {
+    std::cout << "const char* 特化版本: ";
+    return (strcmp(a, b) > 0) ? a : b;
+}
+
+int main() {
+    int x = 10, y = 20;
+    std::cout << max(x, y) << std::endl; // 调用通用版本
+
+    const char* s1 = "hello";
+    const char* s2 = "world";
+    std::cout << max(s1, s2) << std::endl; // 调用 const char* 特化版本
+    return 0;
+}
+```
+---
+
+**模板补充**、
+
+- 每个独立的模板类都需要声明一次 `template <typename T>`
+```cpp
+// ✅ 第一个模板类
+template <typename T>
+class Box {
+    T content;
+};
+
+// ✅ 第二个模板类（需要重新声明）
+template <typename T>
+class Wrapper {
+    T data;
+};
+
+// ❌ 错误：不能共用一次声明
+template <typename T>
+class Box { ... };
+class Wrapper { ... };  // 这个 Wrapper 不是模板类！
+```
+
+- 在一个模板类内部定义多个成员函数时，不需要重复写 `template <typename T>`
+```cpp
+template <typename T>
+class Box {
+public:
+    void set(const T& item);   // 只是声明，不需要 template
+    T get() const;              // 只是声明，不需要 template
+};
+
+// 类外定义成员函数时才需要再次写 template <typename T>
+template <typename T>
+void Box<T>::set(const T& item) { ... }
+
+template <typename T>
+T Box<T>::get() const { ... }
+```
+
+- 使用特化模板时，需要明确写出具体的类型
+```cpp
+// 通用模板
+template <typename T>
+T max(T a, T b) {
+    return (a > b) ? a : b;
+}
+
+// 特化版本：明确写出类型是 const char*
+template <>                    // 空模板参数列表
+const char* max<const char*>(const char* a, const char* b) {
+    //  ↑ 这里明确写出了返回类型
+    return (strcmp(a, b) > 0) ? a : b;
+}
+```
+
+template <> 告诉编译器"这是一个特化版本"
+
+max<const char*> 明确指定这个特化是针对 const char* 类型的
+
+返回类型 const char* 也必须明确写出
+
 ---
 ### sizeof && strlen
 ```cpp
@@ -1329,7 +1458,7 @@ int main() {
 
 ---
 
-**编译时多态、运行时多态**
+### **编译时多态、运行时多态**
 
 - **编译时多态** 主要通过函数重载和模板实现
     编译器在编译时，就能算出要调用的具体是哪个函数，直接把地址写死在代码里
@@ -1351,7 +1480,8 @@ int main() {
     cout << calc.add(3.14, 2.86); 
 }
 ```
-    在编译出的代码里，对 add 的调用已经变成了两个不同的函数地址。这就好像代码里直接写了 add_int_int 和 add_double_double
+
+在编译出的代码里，对 add 的调用已经变成了两个不同的函数地址。就好像代码里直接写了 add_int_int 和 add_double_double
 
 **模板**
 
