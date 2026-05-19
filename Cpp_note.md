@@ -2017,3 +2017,433 @@ int main(){
 类的大小考虑其非静态成员变量的大小之和（考虑内存对齐），和系统位宽没有直接关系
 
 # C++语言特性
+
+### 左值右值
+
+| 引用名称 | 性质 | 持久性 | 示例 | 作用 |
+| :-- | :-- | :-- | :-- | :-- |
+| 左值 | 持久对象 | 表达式结束依旧存在 | `int& rx = x;` | 可以取地址、作为函数返回值 |
+| 右值 | 临时对象 | 表达式结束不再存在 | `int&& rr = 10;` | 不可取地址、作为函数返回值 | 
+
+左值引用**不能**绑定到要转换的表达式、字面常量或返回右值的表达式。右值引用恰好相反，可以绑定到这类表达式，但不能绑定到一个左值上
+
+```cpp
+// 要转换的表达式：通过各种类型转换（如 static_cast）产生的临时值
+float pi = 3.14f;
+// static_cast<int>(pi) 这个操作会产生一个临时的整型值
+int&& r5 = static_cast<int>(pi); // ✅ 正确：转换的结果是一个临时整数值（右值）
+int&  r6 = static_cast<int>(pi); // ❌ 错误：左值引用不能绑定到这个临时值
+
+// 字面常量
+int&& r1 = 10;  // ✅ 正确：10是一个字面常量（右值）
+int&  r2 = 10;  // ❌ 错误：左值引用不能绑定到字面常量
+
+// 返回右值的表达式：函数返回临时对象或者简单算术表达式
+int getVal() { return 5; }
+
+int&& r3 = getVal(); // ✅ 正确：getVal()返回的是临时值（右值）
+int&  r4 = getVal(); // ❌ 错误：左值引用不能绑定到临时值
+```
+
+**绑定和幅赋值**
+```cpp
+void func(int& ref) {
+    ref = 100;  // 这是赋值：把 100 这个值放到 ref 引用的变量中
+}
+
+int main() {
+    int x = 10;
+    func(x);     // 绑定：ref 绑定到 x, 即`int& ref = x;`
+    // 函数体内 ref = 100 等价于 x = 100
+}
+```
+
+右值引用必须绑定到右值的引用，通过 && 获得。右值引用只能绑定到一个将要销毁的对象上，因此可以自由地移动其资源
+
+`std::move`**:将左值转换为右值**
+
+```cpp
+int main() {
+    MyString a("hello");
+    MyString b = std::move(a);  // 调用移动构造函数
+    // 此时 a 处于"有效但未指定"的状态，通常 data 为 nullptr
+    // 可以给 a 赋新值，但不能直接使用其内容
+    cout << a.length();         // ❌ 危险！a 可能已被掏空
+    return 0;
+}
+```
+
+### 移动语义
+
+将一个对象持有的资源（比如堆上分配的内存）转移给另一个对象，而不是进行深拷贝
+
+```cpp
+class MyString {
+private:
+    char* data;  // 指向堆上的字符串
+    size_t len;
+    
+public:
+    // 拷贝构造函数：深拷贝
+    MyString(const MyString& other) {
+        len = other.len;
+        data = new char[len + 1];   // 末尾记得加个空间放`/0`
+        strcpy(data, other.data);   // 复制所有字符
+    }
+    
+    // 析构函数
+    ~MyString() {
+        delete[] data;
+    }
+};
+
+MyString createString() {
+    MyString temp("hello");
+    return temp;  // 返回时会发生拷贝吗？
+}
+
+int main() {
+    MyString s = createString();  // 可能发生多次拷贝
+    return 0;
+}
+```
+
+上述代码可能发生多次深拷贝，每次都需要分配内存、复制数据，效率很低
+
+对于即将销毁的临时对象（右值），我们不需要深拷贝，只需要把它的资源指针直接拿过来，然后**把原对象的指针置空**（让它不再拥有资源）
+
+```text
+// 传统拷贝：完整复制
+源对象: [堆内存 A] → 复制 → 目标对象: [堆内存 B]
+
+// 移动语义：只转移指针
+源对象: [堆内存 A] → 转移 → 目标对象: [堆内存 A]
+源对象: [空指针]
+```
+
+```cpp
+class MyString {
+private:
+    char* data;
+    size_t len;
+    
+public:
+    // 移动构造函数
+    MyString(MyString&& other) noexcept 
+        : data(other.data), len(other.len) {
+        // 把源对象的指针置空，防止它析构时释放资源
+        other.data = nullptr;
+        other.len = 0;
+    }
+    
+    // 拷贝构造函数（仍然需要）
+    MyString(const MyString& other) {
+        len = other.len;
+        data = new char[len + 1];
+        strcpy(data, other.data);
+    }
+    
+    // 移动赋值运算符
+    MyString& operator=(MyString&& other) noexcept {
+        if (this != &other) {
+            delete[] data;           // 释放当前资源
+            data = other.data;       // 转移资源
+            len = other.len;
+            other.data = nullptr;    // 源对象置空
+            other.len = 0;
+        }
+        return *this;
+    }
+    
+    ~MyString() {
+        delete[] data;
+    }
+};
+```
+**移动赋值运算符解惑**
+
+1. `&other`能得到什么
+```cpp
+MyString& operator=(MyString&& other) noexcept {
+    if (this != &other) {  // &other 是什么？
+    // ...
+    }
+}
+```
+获取`other`引用对象的内存地址
+```cpp
+int a = 10;
+int& ref = a;    // ref 是 a 的引用
+int* ptr = &a;   // ptr 是指针
+
+// 取地址操作
+&a;    // 得到 a 的地址
+&ref;  // 也是得到 a 的地址（不是 ref 自己的地址）
+&ptr;  // 得到 ptr 这个指针变量本身的地址
+```
+本例中一些表达式含义
+| 表达式 | 含义 |
+| :-- | :-- |
+| `other` | 右值引用，引用某个`MyString`对象 |
+| `&other` | 被引用的`MyString`对象地址 |
+| `this` | 指向当前对象(`*this`)内存地址的指针 |
+| `*this` | 当前对象 |
+2. `.`和`->`
+**相关语法规则**
+
+| 类型 | 示例 | 访问成员 | 说明 |
+| :-- | :-- | :-- | :-- |
+| 对象 | `MyString obj` | `obj.data` | 使用`.`访问 |
+| 引用 | `MyString& ref = obj` | `ref.data` | 同上 |
+| 指针 | `MyString* ptr = &obj | `ptr->data`或`(*ptr).data` | 使用`->` |
+3. 返回类型
+如上所述
+
+补充说明：
+
+```cpp
+MyString a, b, c;
+a = b = c = std::move(MyString("hello"));
+//  ↑    ↑    ↑
+//  3    2    1
+// 1. 先执行 c = std::move(temp)
+//    c.operator=(std::move(temp)) 返回 c 的引用
+
+// 2. 再执行 b = (c 的引用)
+//    b.operator=(c 的引用) 返回 b 的引用
+
+// 3. 最后执行 a = (b 的引用)
+//    a.operator=(b 的引用) 返回 a 的引用
+```
+
+| 表达式 | 类型 | 含义 | 相关方法 |
+| :-- | :-- | :-- | :-- |
+| `this` | `T*` | 指向当前对象的指针 | `this->data` |
+| `*this` | `T&` | 当前对象（引用） | `return *this` |
+| `&(*this)` | `T*` | 等价于`this` | `this == &(*this)` |
+
+`noexpect`承诺函数不会抛出异常，如果抛出异常程序会直接终止，调用`std::terminate`。建议将移动构造函数/移动赋值运算符标记为`noexpect`.
+
+| 操作 | 失败风险 | `noexpect` | 原因 |
+| :-- | :-- | :-- | :-- |
+| 拷贝构造函数 | 有 | 通常不加 | 可能因为内存不足抛出异常 |
+| 移动构造函数 | 几乎没有 | 建议加 | 简单移动指针，纯内存操作 |
+
+**折叠原理**
+
+对于`T& &` `T&& &` `T& &&` `T&& &&`四个原始类型，之后`T&& &&`折叠后为`T&&`,其余均为`T&`
+
+### 模板及其实现
+
+模板：创建类或者函数的蓝图或者公式，分为函数模板和类模板。 实现方式：模板定义以关键字 template 开始，后跟一个模板参数列表
+
+- 模板参数列表不能为空
+- 木本类型参数前必须使用关键字 class 或者 typename，在模板参数列表中这两个关键字含义相同，可互换使用
+`template <typename T, typename U, ...>`
+
+定义一个**函数模板**，可以避免为每一种类型定义一个新函数
+
+- 函数模板中模板类型参数可以用来指定返回类型或函数的参数类型，以及在函数体内用于变量声明或类型转换
+- 函数模板实例化：当调用一个模板时，编译器用函数实参来推断模板实参，从而使用实参的类型来确定绑定到模板参数的类型
+
+```cpp
+#include <iostream>
+using namespace std;
+
+template <typename T>
+T add_fun(const T & tmp1, const T & tmp2) {
+    return tmp1 + tmp2;
+}
+
+int main() {
+    int var1, var2;
+    cin >> var1 >> var2;
+    cout << add_fun(var1, var2);
+    
+    double var3, var4;
+    cin >> var3 >> var4;
+    cout << add_fun(var3, var4);
+    return 0;
+}
+```
+
+**类模板**和函数模板类似，以关键字 template 开始，后跟模板参数列表。但是，编译器不能为类模板推断模板参数类型，需要在使用该类模板时，在模板名后面的尖括号中指明类型。
+
+```cpp
+#include <iostream>
+using namespace std;
+
+template <typename T>
+class Complex {
+public:
+    //构造函数
+    Complex(T a, T b) {
+        this->a = a;
+        this->b = b;
+    }
+    
+    //运算符重载
+    Complex<T> operator+(Complex &c) {
+        Complex<T> tmp(this->a + c.a, this->b + c.b);
+        cout << tmp.a << " " << tmp.b << endl;
+        return tmp;
+    }
+private:
+    T a;
+    T b;
+};
+
+int main() {
+    Complex<int> a(10, 20);
+    Complex<int> b(20, 30);
+    Complex<int> c = a + b;
+    return 0;
+}
+```
+**函数模板和类模板**
+- 实例化方式：函数模板实例化由编译程序在处理函数调用时自动完成，类模板实例化需要在程序中显式指定
+- 默认参数：类模板在模板参数列表中可以有默认参数，函数模板在C++11后也支持
+- 特化：函数模板只能全特化；而类模板可以全特化，也可以偏特化
+- 调用方式不同：函数模板可以隐式调用，也可以显式调用；类模板只能显式调用
+
+```cpp
+// 类模板的每个实例化版本拥有独立的静态成员，
+// 函数没有静态成员的概念
+template <typename T>
+class Counter {
+public:
+    static int count;
+};
+
+template <typename T>
+int Counter<T>::count = 0;
+
+int main() {
+    Counter<int>::count = 10;
+    Counter<double>::count = 20;
+    
+    // Counter<int> 和 Counter<double> 的 count 是不同的变量
+    cout << Counter<int>::count;     // 10
+    cout << Counter<double>::count;  // 20
+}
+```
+
+```cpp
+// 默认模板参数
+
+// 函数模板默认参数（C++11）
+template <typename T = int>
+T defaultValue() {
+    return T();
+}
+
+int x = defaultValue();      // T 默认为 int
+
+// 类模板默认参数
+template <typename T = int>
+class Container {
+    T data;
+};
+
+Container<> c;  // 使用默认类型 int
+```
+
+```cpp
+// 类模板偏特化示例
+
+// 原模板
+template <typename T1, typename T2>
+class Pair {
+    T1 first;
+    T2 second;
+};
+
+// 偏特化：两个类型相同时
+template <typename T>
+class Pair<T, T> {
+    T first;
+    T second;
+    // 专门处理两个类型相同的情况
+};
+
+// 函数模板不支持偏特化
+template <typename T>
+T max(T a, T b) { ... }
+// ❌ 错误：函数模板不支持偏特化
+// 函数模板可以用重载替代偏特化
+```
+
+```cpp
+// 调用方式
+#include <iostream>
+using namespace std;
+
+template <typename T>
+T add_fun(const T & tmp1, const T & tmp2) {
+    return tmp1 + tmp2;
+}
+
+int main() {
+    int var1, var2;
+    cin >> var1 >> var2;
+    cout << add_fun<int>(var1, var2); // 显式调用
+    
+    double var3, var4;
+    cin >> var3 >> var4;
+    cout << add_fun(var3, var4); // 隐式调用
+    return 0;
+}
+```
+
+**可变参数模板**接受可变数目参数的模板函数或模板类。将可变数目的参数被称为参数包，包括模板参数包和函数参数包
+
+用省略号来指出一个模板参数或函数参数表示一个包，在模板参数列表中，class… 或 typename… 指出接下来的参数表示零个或多个类型的列表；一个类型名后面跟一个省略号表示零个或多个给定类型的非类型参数的列表。当需要知道包中有多少元素时，可以使用 sizeof… 运算符
+
+```cpp
+template <typename T, typename... Args> // Args 是模板参数包
+void foo(const T &t, const Args&... rest); // 可变参数模板，rest 是函数参数包
+
+#include <iostream>
+using namespace std;
+
+template <typename T>
+void print_fun(const T &t) {
+    cout << t << endl; // 最后一个元素
+}
+
+template <typename T, typename... Args>
+void print_fun(const T &t, const Args &...args) {
+    cout << t << " ";
+    print_fun(args...);
+}
+
+int main() {
+    print_fun("Hello", "wolrd", "!");
+    return 0;
+}
+/*运行结果：
+Hello wolrd !
+*/
+```
+
+# STL 
+**序列式容器**
+按元素插入顺序存储，元素位置与插入顺序相关，不自动排序
+
+`vector` `deque` `list` `array`
+
+**关联式容器**
+元素按键（key） 排序存储，支持快速查找（通常 O (log n)），分为有序和无序两类
+- **有序关联容器**（基于红黑树实现）
+   - set：存储唯一键值，元素自动按键升序排序，键即值（key=value）。适合场景需要去重且有序的数据集合（如存储不重复的 ID 并排序）。
+   - multiset：与 set 类似，但允许键值重复，其他特性相同。
+   - map：存储键值对（key-value），键唯一且自动排序，通过键快速查找值。适合场景键值映射场景（如字典、配置表）。
+   - multimap：与 map 类似，但允许键重复（一个键可对应多个值）
+- **无序关联容器**（基于哈希表实现）
+   - unordered_set / unordered_multiset：功能同 set / multiset，但元素无序，通过哈希表实现，查找、插入、删除平均效率更高（O (1)）。适合场景对顺序无要求，但需要快速增删查的场景。
+   - unordered_map / unordered_multimap：功能同 map / multimap，无序，基于哈希表，平均操作效率 O (1)。
+**容器适配器**
+基于其他容器实现，封装特定接口，提供受限功能。
+- stack：栈，遵循 “后进先出（LIFO）”，仅支持在顶部插入 / 删除 / 访问元素，默认基于 deque 实现，也可指定 vector 或 list 作为底层容器。
+ - queue：队列，遵循 “先进先出（FIFO）”，仅支持在尾部插入、头部删除。默认基于 deque 实现，也可指定 list 作为底层容器。
+ - priority_queue：优先队列，元素按优先级自动排序（默认最大元素在顶部），插入 / 删除效率 O (log n)。默认基于 vector 实现，底层用堆结构维护优先级
