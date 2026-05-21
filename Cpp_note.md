@@ -2503,4 +2503,228 @@ int safe_find(int key) {
 
 ### STL迭代器失效情况
 1. 序列式容器（`vector,deque`）
+    - `vector`:如果插入操作导致容器的内存重新分配，所有指向`vector`的迭代器、指针、引用全部失效。重新分配内存后元素会被移动到新的内存位置
+    - `vector`中删除元素时，指向被删除元素的迭代器、指针和引用会失效，并且指向删除位置之后的元素的迭代器、指针和引用也会失效
+    ```cpp
+    #include <iostream>
+    #include <vector>
+
+    int main() {
+        std::vector<int> vec = {1, 2, 3};
+        auto it = vec.begin() + 1;
+        vec.erase(vec.begin()); // 删除第一个元素
+        // 此时 it 失效
+        // std::cout << *it << std::endl; // 未定义行为
+        return 0;
+    }
+    ```
+    - 在`deque`中间插入元素，所有迭代器、指针和引用都会失效，还有在 `deque` 的头部或尾部插入元素时，指向元素的迭代器、指针和引用不会失效，但如果插入操作导致内存重新分配，那么迭代器可能会失效
+    - 删除 `deque` 中间的元素时，所有迭代器、指针和引用都会失效，还有删除 `deque` 头部或尾部的元素时，指向被删除元素的迭代器、指针和引用会失效
+    ```cpp
+    #include <iostream>
+    #include <deque>
+
+    int main() {
+        std::deque<int> deq = {1, 2, 3};
+        auto it = deq.begin() + 1;
+        deq.insert(deq.begin() + 1, 4); // 在中间插入元素
+        // 此时 it 失效
+        // std::cout << *it << std::endl; // 未定义行为
+        return 0;
+    }
+    ```
+
+    ```cpp
+    #include <iostream>
+    #include <deque>
+
+    int main() {
+        std::deque<int> deq = {1, 2, 3};
+        auto it = deq.begin() + 1;
+        deq.erase(deq.begin() + 1); // 删除中间元素
+        // 此时 it 失效
+        // std::cout << *it << std::endl; // 未定义行为
+        return 0;
+    }
+    ```
 2. 关联式容器（`set,map`）
+    - `set` 在插入元素不会使任何迭代器、指针和引用失效，因为关联式容器使用红黑树等平衡二叉搜索树实现，插入操作只是在树中添加新节点，不会影响其他节点的内存位置.
+    - 删除元素是时，指向被删除元素的迭代器、指针和引用会失效，其他迭代器、指针和引用不会失效
+    - `map`同理
+4. 链表式容器（`list`）
+    - 在 `list` 插入元素不会使任何迭代器、指针和引用失效，因为链表的插入操作只是修改节点的指针，不会影响其他节点的内存位置。但是，指向被删除元素的迭代器、指针和引用会失效，其他迭代器、指针和引用不会失效
+
+### 优先队列`priority_queue`
+`priority_queue`底层采用堆**数据结构**，使用`vector`或`deque`来**实现**
+
+# 智能指针
+1. `std::unique_ptr`
+一种独占所有权的智能指针。它通过使用独占所有权的方式来管理资源，只能有一个`std::unique_ptr`指向同一个对象或数组。当`std::unique_ptr`超出作用域或被显式释放时，它会自动删除所管理的对象或数组。它通常用于表示独占的资源所有权，如动态分配的单个对象或数组
+2. `std::shared_ptr`
+一种共享所有权的智能指针。它可以有多个`std::shared_ptr`指向同一个对象，通过引用计数来管理资源的生命周期。只有当最后一个`std::shared_ptr`超出作用域或被显式释放时，资源才会被删除。`std::shared_ptr`允许多个指针共享对同一资源的访问，通常用于表示共享的资源所有权
+3. `std::weak_ptr`
+一种弱引用的智能指针。它可以指向由`std::shared_ptr`管理的对象，但不会增加引用计数。std::weak_ptr主要用于解决`std::shared_ptr`的循环引用问题，通过`std::weak_ptr.lock()`方法可以获取一个有效的`std::shared_ptr`来访问被管理的对象
+
+### shared_ptr
+```cpp
+#include <iostream>
+#include <memory>
+
+class MyClass {
+public:
+    MyClass() { std::cout << "MyClass constructor" << std::endl; }
+    ~MyClass() { std::cout << "MyClass destructor" << std::endl; }
+};
+
+int main() {
+    std::shared_ptr<MyClass> ptr1 = std::make_shared<MyClass>();
+    std::shared_ptr<MyClass> ptr2 = ptr1; // 共享所有权
+    std::cout << "Use count: " << ptr1.use_count() << std::endl; // 输出 2
+    ptr2.reset(); // 释放 ptr2 的所有权
+    std::cout << "Use count: " << ptr1.use_count() << std::endl; // 输出 1
+    // 当 ptr1 离开作用域时，MyClass 对象的内存会被释放
+    return 0;
+}
+```
+
+当多个`shared_ptr`对象相互引用形成循环时，引用计数永不为0，可能导致内存泄露
+```cpp
+#include <iostream>
+#include <memory>
+
+class B;
+
+class A {
+public:
+    std::shared_ptr<B> b_ptr;
+    ~A() { std::cout << "A destructor" << std::endl; }
+};
+
+class B {
+public:
+    std::weak_ptr<A> a_ptr;  // 使用 std::weak_ptr 打破循环引用
+    ~B() { std::cout << "B destructor" << std::endl; }
+};
+
+int main() {
+    std::shared_ptr<A> a = std::make_shared<A>();
+    std::shared_ptr<B> b = std::make_shared<B>();
+    a->b_ptr = b;
+    b->a_ptr = a;
+    return 0;
+}
+
+// 如果 B 类中的 a_ptr 也使用 std::shared_ptr，就会形成循环引用，导致 A 和 B 对象的内存无法释放。使用 std::weak_ptr 后，b->a_ptr 不会增加 A 对象的引用计数，当 main 函数结束时，a 和 b 的引用计数降为 0，A 和 B 对象的内存会被正确释放
+```
+
+通过`weak_ptr`的`expired()`方法检查所指对象是否已经释放
+```cpp
+#include <iostream>
+#include <memory>
+
+int main() {
+    std::shared_ptr<int> shared = std::make_shared<int>(42);
+    std::weak_ptr<int> weak = shared;
+
+    if (!weak.expired()) {
+        std::cout << "Object is still alive." << std::endl;
+    }
+    // shared释放对象后，weak.expired()返回true
+    shared.reset();
+    if (weak.expired()) {
+        std::cout << "Object has been destroyed." << std::endl;
+    }
+
+    return 0;
+}
+```
+
+### `unique_ptr`
+使用`std::move()`将一个`unique_ptr`对象赋值给另一个`unique_ptr`对象，实现所有权转移
+
+也可以让当前`unique_ptr`调用`release`释放控制权，然后在另一个`unique_ptr`获取控制权
+
+```cpp
+// A 作为一个类 
+std::unique_ptr<A> ptr1(new A());
+std::unique_ptr<A> ptr2 = std::move(ptr1);
+std::unique_ptr<A> ptr3(ptr2.release());
+```
+
+### weak_ptr
+- 对被 `shared_ptr` 管理的对象存在非拥有性（弱）引用，在访问所引用的对象前必须先转化为 `shared_ptr`
+- 可以用来打断 `shared_ptr` 所管理对象的循环引用问题，若这种环被孤立（没有指向环中的外部共享指针），`shared_ptr` 引用计数无法抵达 0，内存被泄露；令环中的指针之一为弱指针可以避免该情况
+- 用来表达临时所有权的概念，当某个对象只有存在时才需要被访问，而且随时可能被他人删除，可以用 weak_ptr 跟踪该对象；需要获得所有权时将其转化为 shared_ptr，此时如果原来的 shared_ptr 被销毁，则该对象的生命期被延长至这个临时的 shared_ptr **同样被销毁**
+
+```cpp
+int main() {
+    weak_ptr<Parent> wpp;
+    weak_ptr<Child> wpc;
+    {
+        shared_ptr<Parent> p(new Parent);  // Parent 对象引用计数 = 1
+        shared_ptr<Child> c(new Child);    // Child 对象引用计数 = 1
+        
+        p->setChild(c);   // Parent::ChildPtr = c → Child 引用计数 = 2
+        c->setPartent(p); // Child::ParentPtr = p → Parent 引用计数 = 2
+        
+        wpp = p;  // weak_ptr 不影响引用计数
+        wpc = c;  // weak_ptr 不影响引用计数
+        
+        cout << p.use_count() << endl; // 输出 2（Parent 引用计数）
+        cout << c.use_count() << endl; // 输出 2（Child 引用计数）
+    }
+    // 离开作用域：
+    // p 被销毁 → Parent 引用计数 2→1
+    // c 被销毁 → Child 引用计数 2→1
+    // 此时 Parent 和 Child 引用计数都是 1，永远不会变成 0
+    // 两个对象都不会被销毁！内存泄漏！
+    
+    cout << wpp.use_count() << endl;  // 输出 1（Parent 还活着）
+    cout << wpc.use_count() << endl;  // 输出 1（Child 还活着）
+    return 0;
+}
+```
+
+```txt
+作用域内：
+┌─────────────────────────────────────────────────┐
+│                                                 │
+│  p (shared_ptr)────┐                            │
+│                    ↓                            │
+│              ┌─────────────┐                    │
+│              │ Parent 对象 │ ←────────────────┐ │
+│              │ 引用计数: 2 │                  │ │
+│              │             │                  │ │
+│              │ ChildPtr ───┼──┐               │ │
+│              └─────────────┘  │               │ │
+│                               ↓               │ │
+│  c (shared_ptr)────┐    ┌─────────────┐       │ │
+│                    │    │ Child 对象  │       │ │
+│                    │    │ 引用计数: 2 │       │ │
+│                    │    │             │       │ │
+│                    └──→ │ ParentPtr ──┼───────┘ │
+│                         └─────────────┘         │
+└─────────────────────────────────────────────────┘
+
+作用域结束后（p和c被销毁）：
+┌─────────────────────────────────────────────────┐
+│                                                 │
+│              ┌─────────────┐                    │
+│              │ Parent 对象 │ ←────────────────┐ │
+│              │ 引用计数: 1 │                  │ │
+│              │             │                  │ │
+│              │ ChildPtr ───┼──┐               │ │
+│              └─────────────┘  │               │ │
+│                               ↓               │ │
+│                         ┌─────────────┐       │ │
+│                         │ Child 对象  │       │ │
+│                         │ 引用计数: 1 │       │ │
+│                         │             │       │ │
+│                         │ ParentPtr ──┼───────┘ │
+│                         └─────────────┘         │
+│                                                 │
+│  两个对象互相持有对方，都无法释放！              │
+└─────────────────────────────────────────────────┘
+```
+
+# 内存管理
