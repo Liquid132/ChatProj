@@ -2447,3 +2447,60 @@ Hello wolrd !
 - stack：栈，遵循 “后进先出（LIFO）”，仅支持在顶部插入 / 删除 / 访问元素，默认基于 deque 实现，也可指定 vector 或 list 作为底层容器。
  - queue：队列，遵循 “先进先出（FIFO）”，仅支持在尾部插入、头部删除。默认基于 deque 实现，也可指定 list 作为底层容器。
  - priority_queue：优先队列，元素按优先级自动排序（默认最大元素在顶部），插入 / 删除效率 O (log n)。默认基于 vector 实现，底层用堆结构维护优先级
+  
+**map不是线程安全的**，如果多个线程同时对std::map进行操作，可能导致未定义行为
+
+线程不安全主要体现在：
+- 并发写操作 
+  - 多个线程同时执行插入（`insert`）、删除（`erase`）或修改（如 `operator[]` 赋值）时，会破坏 `std::map` 内部的红黑树结构（有序关联容器的底层实现），导致数据错乱
+- 读写并发
+  - 一个线程读、另一个线程写，可能出现问题。例如，读线程正在遍历 map 时，写线程修改了结构，可能导致读线程的迭代器失效，触发不可预知的错误
+- 无内置同步机制
+  - `std::map` 没有提供任何锁（如互斥量）或原子操作来保证多线程安全，所有同步逻辑需要开发者手动实现
+
+使用`std::mutex`或`std::lock_guard`等工具确保同一时间只有一个线程能够访问或修改map
+
+```cpp
+#include <map>
+#include <mutex>
+
+std::map<int, int> my_map;
+std::mutex mtx;  // 互斥锁
+
+// 线程安全的插入操作
+void safe_insert(int key, int value) {
+    std::lock_guard<std::mutex> lock(mtx);  // 自动加锁/解锁
+    my_map[key] = value;
+}
+
+// 线程安全的查找操作
+int safe_find(int key) {
+    std::lock_guard<std::mutex> lock(mtx);
+    auto it = my_map.find(key);
+    return (it != my_map.end()) ? it->second : -1;
+}
+```
+
+### 容器遍历时插入
+#### vector
+- `push_back`一个元素后，`end`操作返回的迭代器肯定失效
+- `push_back`一个元素后，如果`vector`的`capacity`发生了改变，则需要重新加载整个容器，此时`first`和`end`操作返回的迭代器都会失效
+
+#### list
+- 插入操作(`insert`)和接合操作(`splice`)不会造成原有的list迭代器失效
+
+#### deque
+- 在`deque`容器首部或者尾部插入元素，不会使得任何迭代器失效
+- 在`deque`容器的任何其他位置进行插入或删除操作都将使指向该容器元素的所有迭代器失效
+
+#### set和map
+- 与`list`相同，当对其进行`insert`或者`erase`操作时，操作之前的所有迭代器，在操作完成之后都依然有效，但被删除元素的迭代器失效
+
+**erase擦除**
+顺序容器（序列式容器，比如`vector`、`deque`）删除元素的方式：`erase`迭代器不仅使所指向被删除的迭代器失效，而且使被删元素之后的**所有迭代器**失效(`list`除外)，所以不能使用`erase(it++)`的方式，但是`erase`的返回值是下一个有效迭代器：`It = c.erase(it);`
+
+关联容器(关联式容器，比如`map、set、multimap、multiset`等) 删除元素的方式：`erase`迭代器只是被删除元素的迭代器失效，但是返回值是`void`，所以要采用`erase(it++)`的方式删除迭代器；`c.erase(it++)`
+
+### STL迭代器失效情况
+1. 序列式容器（`vector,deque`）
+2. 关联式容器（`set,map`）
