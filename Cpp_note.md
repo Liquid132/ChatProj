@@ -2728,3 +2728,564 @@ int main() {
 ```
 
 # 内存管理
+
+### 虚拟内存
+1. 虚拟内存可以使得进程对运行内存超过物理内存大小，因为程序运行符合局部性原理，CPU 访问内存会有很明显的重复访问的倾向性
+   对于那些没有被经常使用到的内存，我们可以把它换出到物理内存之外，比如硬盘上的 swap 区域
+2. 每个进程都有自己的页表，所以每个进程的虚拟内存空间就是相互独立的
+   这些页表是私有的，其他进程无法访问，以此解决多进程地址冲突问题
+3. 页表里的页表项中除了物理地址之外，还有一些标记属性的比特，比如控制一个页的读写权限，标记该页是否存在等
+
+### 虚拟内存用户态地址空间分配
+由高到低分为以下几块，互不干扰
+- 栈段  包括局部变量、函数调用上下文等，比如`int x = 3`，栈大小一般为8M，可以自定义大小
+- 文件映射段  包括动态库、共享内存等
+- 堆段  包括动态分配的内存，从低地址向上增长
+- BSS段  包括未初始化的静态变量、全局变量
+- 数据段  包括已初始化的静态变量和全局变量
+- 代码段  包括可执行二进制代码
+
+**内存分区**
+由高地址到低地址依次为
+- 栈区
+由编译器自动分配释放，存放函数的参数值，局部变量等。其操作方式类似于数据结构中的栈
+- 堆区
+一般由程序员分配释放，若程序员不释放，程序结束时可能由OS回收。注意，与数据结构中的堆是两回事，分配方式倒是类似于链表
+- 全局区（静态区）
+全局变量和静态变量被分配到同一块内存中。在C++中，全局区还包含了常量区，字符串常量和其他常量也是存储在此
+- 常量区
+全局区的一部分，存放常量，不允许修改
+- 代码区
+存放函数体的二进制代码
+
+### 内存对齐
+**对齐边界：** 编译器一般会自动地将数据存放在它的自然边界上。例如，int类型的数据，它的大小为4字节，编译器会将其存放在4的倍数的地址上
+**填充字节：** 编译器有时候在数据之间填充一些字节以满足对齐要求。这些字节没有实际的意义，只是为了满足内存对齐的要求
+
+```cpp
+struct example {
+    char c      // 1B
+    int i       // 4B 
+    double d    // 8B 
+}
+```
+[`char c`, 1B(起始地址)] - [`padding`, 3B] - [`int i`, 4B] - [`double d`, 8B] - [`padding`(末尾填充), 0B]
+**对齐规则**
+- 每个成员地址必须为其对齐数的整数倍
+- 结构体对齐数为最大成员的对齐数（本例为8）
+- 结构体总大小需为其对齐数整数倍
+- 通过在成员之间或末尾填充内存空隙`padding`保证满足对齐要求
+
+原因
+- 平台：某些硬件平台只能在某些地址处取某些特定类型的数据
+- 性能：对齐的内存访问只需一次
+
+### 动态链接库装载到内存
+通过用mmap把该库直接映射到各个进程的地址空间中，尽管每个进程都认为自己地址空间中加载了该库，但实际上该库在内存中只有一份
+![图片描述](./Cpp_Picture/Memory.jpg)
+
+### 函数调用压栈
+- 保存返回地址：在函数调用前，调用指令会将下一条指令的地址（即函数调用后需要继续执行的地址）压入栈中，以便函数执行完毕后能够正确返回到调用点。
+- 保存调用者的栈帧指针：在函数调用前，调用指令会将当前栈帧指针（即调用者的栈指针）压入栈中，以便函数执行完毕后能够恢复到调用者的执行状态。
+- 传递参数：函数调用时，会将参数值依次压入栈中，这些参数值在函数内部可以通过栈来访问。
+- 分配局部变量空间：函数调用时，会为局部变量分配空间，这些局部变量会被保存在栈中。栈指针会相应地移动以适应新的局部变量空间
+
+# C++ 11
+### 类型推导和简化语法
+| 名称 | 描述 | 示例 |
+| :-- | :-- | :-- |
+| `auto` | 自动推导变量类型，简化复杂类型声明（如迭代器）| `auto x = 42` |
+| `decltype` | 推导表达式类型，保留 const 和引用属性，适用于模板编程 | `int i=1; decltype(i) j = i;`|
+
+`decltype`推导出的类型会原样保留表达式的`const / volatile`属性、左右值引用属性，而`auto`通常会丢弃
+
+```cpp
+#include <iostream>
+using namespace std;
+
+int main() {
+    int a = 10;
+    const int ca = a;
+    int& ra = a;
+    const int& cra = a;
+    
+    // ========== auto ==========
+    auto x1 = ca;      // 推导为 int（丢弃 const）
+    auto x2 = ra;      // 推导为 int（丢弃引用）
+    auto x3 = cra;     // 推导为 int（丢弃 const 和引用）
+    
+    // ========== decltype ==========
+    decltype(ca)  y1 = a;  // 推导为 const int（保留 const）
+    decltype(ra)  y2 = a;  // 推导为 int&（保留引用）
+    decltype(cra) y3 = a;  // 推导为 const int&（保留 const 和引用）
+    
+    // 验证
+    x1 = 20;   // ✅ 可以修改（const 被丢弃）
+    // y1 = 20; // ❌ 错误：y1 是 const int，不能修改
+    
+    y2 = 30;   // ✅ 修改的是 a 本身（因为 y2 是引用）
+    cout << a << endl;  // 输出 30
+    
+    return 0;
+}
+```
+表达式`decltype((x))`推导结果为`int&`,因为(x)是左值表达式，推导出来为左值引用
+
+*推导规则表*
+| 表达式类型 | `decltype` 推导结果 | 示例代码 | 推导结果 |
+|-----------|-------------------|---------|---------|
+| **变量名（不加括号）** | 变量的声明类型 | `int x;`<br>`decltype(x)` | `int` |
+| **变量名（加括号）** | 左值引用 | `int x;`<br>`decltype((x))` | `int&` |
+| **左值表达式** | 左值引用 | `int x;`<br>`decltype(++x)` | `int&` |
+| **右值表达式** | 类型本身 | `int x;`<br>`decltype(x++)` | `int` |
+| **字面常量** | 类型本身 | `decltype(42)` | `int` |
+| **函数调用（返回引用）** | 引用类型 | `int& getRef();`<br>`decltype(getRef())` | `int&` |
+| **函数调用（返回值）** | 值类型 | `int getVal();`<br>`decltype(getVal())` | `int` |
+| **字符串字面量** | 数组类型 | `decltype("hello")` | `const char[6]` |
+| **类成员访问** | 成员的声明类型 | `struct S { int a; };`<br>`decltype(S::a)` | `int` |
+
+---
+```cpp
+int x = 10;
+
+decltype(x)   a = x;   // 推导为 int（变量名，直接推导）
+decltype((x)) b = x;   // 推导为 int&（括号表达式，推导为左值引用）
+
+// 验证
+int c = 20;
+a = c;   // 正常赋值
+b = c;   // b 是引用，修改的是 x
+cout << x << endl;   // 输出 20
+```
+
+### 右值引用与移动语义
+`&&`在变量、参数声明中表示右值引用，如`void func(int&& p);`
+在**模板参数**中它表示**万能引用**，可以绑定左值或右值
+```cpp
+template<typename T>
+void wrapper(T&& arg) {  // T&& 是万能引用
+    // arg 可以绑定左值，也可以绑定右值
+}
+
+int x = 10;
+wrapper(x);   // T 推导为 int&，arg 类型为 int&
+wrapper(20);  // T 推导为 int，arg 类型为 int&&
+```
+
+在传递参数时，可能会丢失类型信息，此时需要使用`std::forward`
+```cpp
+template<typename T>
+void wrapper(T&& arg) {
+    // 问题：arg 本身是一个有名字的变量，所以它是左值！
+    // 即使 arg 绑定了右值，arg 本身也是左值
+    target(arg);  // ❌ 永远以左值形式传递
+}
+
+void target(int& x) { cout << "左值" << endl; }
+void target(int&& x) { cout << "右值" << endl; }
+
+int main() {
+    wrapper(10);  // 期望调用 target(int&&)
+    // 但实际会调用 target(int&)，因为 arg 是左值
+}
+```
+根据原始参数的类型，`forward`能够决定将 `arg` 作为左值还是右值转发
+```cpp
+template<typename T>
+void wrapper(T&& arg) {
+    target(std::forward<T>(arg));  // ✅ 完美保持原始属性
+}
+
+int main() {
+    int x = 10;
+    wrapper(x);   // 传入左值 → forward 转发为左值
+    wrapper(20);  // 传入右值 → forward 转发为右值
+}
+```
+
+### 智能指针
+
+### 函数与模板增强
+1. `lamda`表达式
+```cpp
+int x = 10, y = 20;
+
+// 值捕获（复制）
+auto f1 = [x]() { return x; };        // 只捕获 x
+auto f2 = [=]() { return x + y; };    // 捕获所有变量（值）
+
+// 引用捕获
+auto f3 = [&x]() { x = 30; };         // 只捕获 x（引用）
+auto f4 = [&]() { x = 40; y = 50; };  // 捕获所有变量（引用）
+
+// 混合捕获
+auto f5 = [x, &y]() { y += x; };      // x 值捕获，y 引用捕获
+auto f6 = [=, &x]() { x++; };         // 默认值捕获，x 引用捕获
+auto f7 = [&, x]() { return x; };     // 默认引用捕获，x 值捕获
+
+// C++14 广义捕获
+auto f8 = [z = x + y]() { return z; };    // 表达式捕获
+auto f9 = [p = std::move(ptr)]() {};      // 移动捕获
+```
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+int main() {
+    // 基础 lambda
+    auto add = [](int a, int b) -> int {
+        return a + b;
+    };
+    cout << add(3, 5) << endl;  // 输出: 8
+    
+    // 带捕获的 lambda
+    int multiplier = 2;
+    auto multiply = [multiplier](int x) {
+        return x * multiplier;
+    };
+    cout << multiply(5) << endl;  // 输出: 10
+    
+    // mutable lambda（值捕获可修改）
+    int counter = 0;
+    auto increment = [counter]() mutable {
+        counter++;
+        return counter;
+    };
+    cout << increment() << endl;  // 输出: 1
+    cout << increment() << endl;  // 输出: 2
+    cout << "原始 counter: " << counter << endl;  // 输出: 0（不变）
+    
+    // 在 STL 算法中使用
+    vector<int> nums = {1, 2, 3, 4, 5};
+    
+    // 过滤偶数
+    nums.erase(remove_if(nums.begin(), nums.end(),
+        [](int n) { return n % 2 == 0; }), nums.end());
+    // nums 变为 {1, 3, 5}
+    
+    // 排序（自定义比较）
+    sort(nums.begin(), nums.end(),
+        [](int a, int b) { return a > b; });  // 降序
+    
+    // C++14 泛型 lambda
+    auto generic_add = [](auto a, auto b) { return a + b; };
+    cout << generic_add(3, 5) << endl;      // 8 (int)
+    cout << generic_add(3.14, 2.71) << endl; // 5.85 (double)
+    
+    // C++14 返回 auto 推导
+    auto get_value = [](int x) {
+        if (x > 0) return x;
+        else return 0;  // 必须统一返回类型
+    };
+    
+    return 0;
+}
+```
+2. 变长参数模板
+模板接受任意数量、任意类型的参数，是实现 `printf`、`std::tuple`、`std::function` 等的基础
+```cpp
+template<typename... Args> void func(Args... args);
+```
+`typename... Args` 为模板参数包，表示零或多个类型
+`Args... args` 为函数参数包，表示零或多个参数
+`sizeof... (Args)` 为包大小运算符，为编译时获取参数个数
+`args...` 为包展开，表示将参数包展开为多个参数
+**递归展开**
+```cpp
+#include <iostream>
+using namespace std;
+
+// 递归终止函数
+void print() {
+    cout << endl;
+}
+
+// 递归函数：打印第一个参数，再递归打印剩余参数
+template<typename T, typename... Args>
+void print(T first, Args... rest) {
+    cout << first << " ";
+    print(rest...);  // 展开参数包
+}
+
+int main() {
+    print(1, 2.5, "hello", 'c');
+    // 输出: 1 2.5 hello c
+    return 0;
+}
+```
+**非递归展开（C++17之后）**
+```cpp
+#include <iostream>
+using namespace std;
+
+// 一元右折叠
+template<typename... Args>
+auto sum_right(Args... args) {
+    return (args + ...);  // 展开为: arg1 + (arg2 + (arg3 + ...))
+}
+
+// 一元左折叠
+template<typename... Args>
+auto sum_left(Args... args) {
+    return (... + args);  // 展开为: ((... + arg2) + arg1)
+}
+
+// 二元折叠
+template<typename... Args>
+auto sum_with_init(Args... args) {
+    return (0 + ... + args);  // 初始值 0，展开为: (((0 + arg1) + arg2) + ...)
+}
+
+// 打印所有参数（逗号运算符折叠）
+template<typename... Args>
+void print_all(Args... args) {
+    (cout << ... << args) << endl;  // 左折叠，连续输出
+}
+
+template<typename... Args>
+void print_with_space(Args... args) {
+    ((cout << args << " "), ...);  // 逗号运算符折叠
+    cout << endl;
+}
+
+int main() {
+    cout << sum_right(1, 2, 3, 4) << endl;     // 10
+    cout << sum_with_init(1, 2, 3, 4) << endl; // 10
+    
+    print_all(1, 2.5, "hello");      // 12.5hello（无空格）
+    print_with_space(1, 2.5, "hello"); // 1 2.5 hello
+    return 0;
+}
+```
+| 类型 | 语法 | 展开 | 示例 |
+| :-- | :-- | :-- | :-- |
+| 一元右折叠 | `(args op ...)` | `a op (b op (c op d))` | `(args + ...)` |
+| 一元左折叠 | `(... op args)` | `((a op b) op c) op d` | `(... + args)` |
+| 二元右折叠 | `(init op ... op args)` | `init op (a op (b op (c op d)))` | `(0 + ... + args)` |
+| 二元左折叠 | `略` | 略 | lue |
+---
+3. `constexpr`常量表达式
+和模板结合后可以在编译时进行计算，编译时而非运行时求值，优化性能
+```cpp
+#include <iostream>
+using namespace std;
+
+// constexpr 函数：可在编译时求值
+constexpr int square(int x) {
+    return x * x;
+}
+
+constexpr int factorial(int n) {
+    return n <= 1 ? 1 : n * factorial(n - 1);
+}
+
+// C++14 允许更复杂的逻辑
+constexpr int fibonacci(int n) {
+    if (n <= 1) return n;
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+int main() {
+    // 编译时计算
+    constexpr int sq = square(5);      // 25，编译时完成
+    constexpr int fact = factorial(5); // 120，编译时完成
+    constexpr int fib = fibonacci(10); // 55，编译时完成
+    
+    // 运行时计算（也允许）
+    int x = 10;
+    int runtime_sq = square(x);        // 运行时计算
+    
+    // 编译时常量表达式要求
+    int arr[square(5)];                // ✅ int arr[25];
+    // int arr2[x];                    // ❌ 错误：x 不是常量表达式
+    
+    cout << "sq: " << sq << endl;
+    cout << "fact: " << fact << endl;
+    cout << "fib: " << fib << endl;
+    
+    return 0;
+}
+```
+### 多线程
+| 组件 | 作用 | 场景 |
+| :-- | :-- | :-- |
+| `std::thread` | 创建、管理线程 | 精细管控线程生命周期 |
+| `std::async` | 异步执行任务 | 一次性任务、自动管理线程 |
+| `std::future` | 获取异步结果 | 配合`async/promise`获取返回值 |
+| `std::promise` | 设置异步值 | 手动控制`future`值 |
+
+---
+**std::thread**
+```cpp
+#include <iostream>
+#include <thread>
+#include <chrono>
+using namespace std;
+
+void simpleTask() {
+    cout << "线程执行中..." << endl;
+    this_thread::sleep_for(chrono::seconds(1));
+    cout << "线程执行完毕" << endl;
+}
+
+int add(int a, int b) {
+    return a + b;
+}
+
+int main() {
+    // 方式1：普通函数
+    thread t1(simpleTask);
+    
+    // 方式2：带参数的函数
+    thread t2(add, 3, 5);
+    
+    // 方式3：lambda 表达式
+    thread t3([](int x) {
+        cout << "lambda 接收: " << x << endl;
+    }, 42);
+    
+    // 等待线程完成
+    t1.join();
+    t2.join();
+    t3.join();
+    
+    return 0;
+}
+```
+
+`join()` 等待线程执行完毕，保证线程在退出前完成
+`detach()` 分离线程让其独立运行，分离的线程无法再使用`join`
+
+```cpp
+void backgroundTask() {
+    // 长时间运行的后台任务
+    while (true) {
+        this_thread::sleep_for(chrono::seconds(1));
+        cout << "后台运行..." << endl;
+    }
+}
+
+int main() {
+    thread t(backgroundTask);
+    t.detach();  // 分离，主线程继续执行
+    
+    // 主线程可以做其他事
+    this_thread::sleep_for(chrono::seconds(3));
+    cout << "主线程退出" << endl;
+    // 后台线程继续运行（程序不会等待它）
+    
+    return 0;
+}
+```
+
+### 线程安全
+```cpp
+#include <mutex>
+
+mutex mtx;
+int shared_counter = 0;
+
+void increment() {
+    for (int i = 0; i < 10000; ++i) {
+        lock_guard<mutex> lock(mtx);  // RAII 自动加锁/解锁
+        shared_counter++;
+    }
+}
+
+int main() {
+    thread t1(increment);
+    thread t2(increment);
+    
+    t1.join();
+    t2.join();
+    
+    cout << "最终值: " << shared_counter << endl;  // 20000
+    return 0;
+}
+```
+- 多个线程操作，不会等待for循环执行完毕。锁在每次循环结束时释放，而非等待整个函数结束
+- 释放锁的时间由`lock_guard`对象的生命周期决定
+  - **作用域结束** `lock_guard`离开其定义所在的`{}`时自动析构，释放锁
+  - **函数返回** 如果`lock_guard`定义在函数开头，函数返回时释放锁
+  - **异常退出** 异常导致栈展开时，`lock_guard`析构，释放锁
+  - **手动释放** 使用`unique_lock`配合`unlock()`手动释放，但是不推荐
+
+### `future`和`promise`
+future为异步结果接收端，用于获取未来准备的值
+promise为异步结果发送端，用于设置值
+```cpp
+#include <future>
+
+void setValue(promise<int> prom) {
+    this_thread::sleep_for(chrono::seconds(1));
+    prom.set_value(42);  // 设置结果
+}
+
+int main() {
+    promise<int> prom;
+    future<int> fut = prom.get_future();  // 获取对应的 future
+    
+    thread t(setValue, move(prom));  // promise 只能移动
+    
+    cout << "等待结果..." << endl;
+    int result = fut.get();  // 阻塞直到有结果
+    cout << "结果: " << result << endl;
+    
+    t.join();
+    return 0;
+}
+```
+
+### `std::async`
+返回`future`，自动管理线程，调用后立即在新线程执行
+```cpp
+#include <future>
+
+int heavyTask(int n) {
+    cout << "线程ID: " << this_thread::get_id() << endl;
+    this_thread::sleep_for(chrono::seconds(1));
+    return n * n;
+}
+
+int main() {
+    // 自动选择执行策略
+    future<int> fut = async(heavyTask, 5);
+    
+    // 做其他事...
+    cout << "做其他工作..." << endl;
+    
+    // 获取结果（阻塞）
+    int result = fut.get();
+    cout << "结果: " << result << endl;
+    
+    return 0;
+}
+```
+
+### delete和default
+- **delete** 函数无法被调用
+- **default** 编译器生成默认函数
+```cpp
+#include <iostream>
+using namespace std;
+
+class A
+{
+public:
+	A() = default; // 表示使用默认的构造函数
+	~A() = default;	// 表示使用默认的析构函数
+	A(const A &) = delete; // 表示类的对象禁止拷贝构造
+	A &operator=(const A &) = delete; // 表示类的对象禁止拷贝赋值
+};
+int main()
+{
+	A ex1;
+	A ex2 = ex1; // error: use of deleted function 'A::A(const A&)'
+	A ex3;
+	ex3 = ex1; // error: use of deleted function 'A& A::operator=(const A&)'
+	return 0;
+}
+```
+**构造函数的参数必须是`const A&`，这是C++语法固定形式（约定俗成）。加`const`使其能够拷贝`const`对象和临时对象
