@@ -482,7 +482,98 @@ PTR2 c, d;
 using INT = int;
 // 等价于 typedef int INT;
 ```
-现代C++趋势是使用using替代typedef；constexpr/inline/trmplate替代大量#define
+现代C++趋势是使用`using`替代`typedef`；`constexpr/inline/template`替代大量`#define`
+
+```cpp
+// ❌ typedef：语法怪异，难以理解
+typedef void (*FuncPtr)(int, double);
+typedef std::map<std::string, std::vector<int>> MyMap;
+
+// 定义模板别名？typedef 做不到，需要用包装类
+template<typename T>
+struct MyAlloc {
+    typedef std::vector<T, MyAllocator<T>> type;
+};
+MyAlloc<int>::type v;  // 使用起来很繁琐
+```
+
+---
+```cpp
+// ✅ using：直观，像普通变量赋值一样
+using FuncPtr = void(*)(int, double);
+using MyMap = std::map<std::string, std::vector<int>>;
+
+// ✅ using 可以直接定义模板别名
+template<typename T>
+using MyVector = std::vector<T, MyAllocator<T>>;
+
+MyVector<int> v;  // 使用简洁，像普通模板一样
+```
+
+`#define` 是文本替换，没有类型检查，不遵守作用域，调试困难
+`constexpr`类型安全、作用域可控、可调试
+```cpp
+// ❌ #define：没有类型，不检查作用域
+#define PI 3.14159
+#define MAX_BUFFER 1024
+#define SQUARE(x) ((x)*(x))
+
+int main() {
+    double area = PI * r * r;      // PI 没有类型，调试时看不到符号
+    #undef PI                      // 可以在任意位置取消定义，危险
+    
+    int arr[MAX_BUFFER];           // 如果 MAX_BUFFER 被意外重定义，行为不可预测
+    
+    int result = SQUARE(a + b);    // 宏容易出错，需要加很多括号
+}
+```
+---
+```cpp
+// ✅ constexpr：有类型，有作用域，可调试
+constexpr double PI = 3.14159;
+constexpr int MAX_BUFFER = 1024;
+
+// constexpr 函数也可以编译时计算
+constexpr int square(int x) {
+    return x * x;
+}
+
+int main() {
+    double area = PI * r * r;      // PI 是真正的变量，调试器可见
+    int arr[MAX_BUFFER];           // 编译时常量，安全
+    
+    // 在局部作用域定义
+    constexpr int LOCAL_MAX = 100; // 只在当前作用域有效
+    
+    int result = square(a + b);    // 普通函数调用，没有宏的陷阱
+}
+```
+
+C++17之前，跨文件共享常量麻烦
+```cpp
+// ❌ 传统方式：需要在 .h 声明，在 .cpp 定义
+// constants.h
+extern const int GLOBAL_VALUE;
+```
+---
+```cpp
+// constants.cpp
+const int GLOBAL_VALUE = 42;
+```
+---
+```cpp
+// 如果只想用宏，但没有类型安全
+#define GLOBAL_VALUE 42
+```
+---
+`inline`变量可以单文件定义，跨文件使用
+```cpp
+// ✅ 直接在一个头文件中定义即可
+// constants.h
+inline constexpr int GLOBAL_VALUE = 42;  // inline + constexpr 完美组合
+
+// 其他任何文件包含这个头文件，使用的都是同一个变量
+```
 
 ## volatile关键字
 当对象值可能在程序的控制或检测之外被改变时，应该将该对象声明为 violatile，告知编译器不用归该对象进行优化。
