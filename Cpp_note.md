@@ -65,7 +65,7 @@
 
 #### 2. union（联合体）
 
-- **内存分配**：采用**内存覆盖（重叠）**技术
+- **内存分配**：采用**内存覆盖**技术
 - **地址分布**：所有成员共享**同一块内存**，起始地址相同
 - **大小计算**：联合体总大小 = **最大成员**的大小（+ 对齐调整）
 - **有效性**：**同时只有一个成员持有有效值**，修改任一成员会覆盖其他成员的数据
@@ -88,7 +88,7 @@ cout << suzeof(u9) << endl;     // 16
 ```
 # C++ struct vs class 继承
 
-## 1️⃣ 核心规则
+### 1️⃣ 核心规则
 
 在 C++ 中，**继承方式的默认权限取决于派生类的类型**：
 
@@ -116,7 +116,7 @@ cout << suzeof(u9) << endl;     // 16
 
 ---
 
-## 2️⃣ 案例分析
+### 2️⃣ 案例分析
 
 ### 示例 1：struct vs class
 
@@ -163,7 +163,7 @@ struct C : B {
 };
 ```
 # C++  static静态成员变量
-## static作用于局部变量
+### static作用于局部变量
 改变局部变量生存周期，令其存在于定义之后，直到程序运行结束
 ```cpp
 #include <iostream>
@@ -191,15 +191,16 @@ int main()
 类的静态成员函数中只能访问静态成员变量或者静态成员函数，不能将静态成员函数定义成虚函数。
 
 **静态成员变量使用说明**
-    - 类内声明、类外定义和初始化
-    - 定义和初始化时不要出现static关键字和private、public、protected
-    - 静态成员变量相当于类作用域中的全局变量，被其所有对象共享，包括派生类对象
-    - 静态成员变量可以作为成员函数的参数，普通成员变量不行(例1)
-    - 静态数据成员的类型可以是所属类的类型，而普通数据成员的类型只能是**该类类型的指针或引用**（例2
+  - 类内声明、类外定义和初始化
+  - 定义和初始化时不要出现static关键字和private、public、protected
+  - 静态成员变量相当于类作用域中的全局变量，被其所有对象共享，包括派生类对象
+  - 静态成员变量可以作为成员函数的参数，普通成员变量不行(例1)
+  - 静态数据成员的类型可以是所属类的类型，而普通数据成员的类型只能是**该类类型的指针或引用**（例2
 ```cpp
 #include <iostream>
 using namespace std;
 
+// 例1
 class A
 {
 public:
@@ -234,6 +235,24 @@ public:
 | **全局静态变量** | 限制变量仅在当前文件内可见 | 多个文件需要独立使用同名变量 | 整个程序运行期间 |
 | **局部静态变量** | 在函数第一次调用时变量被初始化，之后保留值 | 记录调用次数、单例模式中确保全局仅有一个实例 | 同上 |
 | **类静态成员变量** | 于整个类而非某个对象，所有对象共享该变量，需要在类外单独初始化 | 统计类的实例数量（构造函数中total++、析构函数中total-- | 同上 |
+
+```cpp
+// 1. 全局静态变量
+static int file_scope_only = 10;  // 只在当前 .cpp 文件可见
+
+// 2. 局部静态变量
+void func() {
+    static int count = 0;         // 函数结束时不会销毁，下次调用保留值
+    count++;
+}
+
+// 3. 类静态成员
+class MyClass {
+    static int class_var;         // 所有对象共享
+};
+int MyClass::class_var = 0;
+```
+---
 
 ## 数据结构核心知识笔记
 
@@ -463,7 +482,98 @@ PTR2 c, d;
 using INT = int;
 // 等价于 typedef int INT;
 ```
-现代C++趋势是使用using替代typedef；constexpr/inline/trmplate替代大量#define
+现代C++趋势是使用`using`替代`typedef`；`constexpr/inline/template`替代大量`#define`
+
+```cpp
+// ❌ typedef：语法怪异，难以理解
+typedef void (*FuncPtr)(int, double);
+typedef std::map<std::string, std::vector<int>> MyMap;
+
+// 定义模板别名？typedef 做不到，需要用包装类
+template<typename T>
+struct MyAlloc {
+    typedef std::vector<T, MyAllocator<T>> type;
+};
+MyAlloc<int>::type v;  // 使用起来很繁琐
+```
+
+---
+```cpp
+// ✅ using：直观，像普通变量赋值一样
+using FuncPtr = void(*)(int, double);
+using MyMap = std::map<std::string, std::vector<int>>;
+
+// ✅ using 可以直接定义模板别名
+template<typename T>
+using MyVector = std::vector<T, MyAllocator<T>>;
+
+MyVector<int> v;  // 使用简洁，像普通模板一样
+```
+
+`#define` 是文本替换，没有类型检查，不遵守作用域，调试困难
+`constexpr`类型安全、作用域可控、可调试
+```cpp
+// ❌ #define：没有类型，不检查作用域
+#define PI 3.14159
+#define MAX_BUFFER 1024
+#define SQUARE(x) ((x)*(x))
+
+int main() {
+    double area = PI * r * r;      // PI 没有类型，调试时看不到符号
+    #undef PI                      // 可以在任意位置取消定义，危险
+    
+    int arr[MAX_BUFFER];           // 如果 MAX_BUFFER 被意外重定义，行为不可预测
+    
+    int result = SQUARE(a + b);    // 宏容易出错，需要加很多括号
+}
+```
+---
+```cpp
+// ✅ constexpr：有类型，有作用域，可调试
+constexpr double PI = 3.14159;
+constexpr int MAX_BUFFER = 1024;
+
+// constexpr 函数也可以编译时计算
+constexpr int square(int x) {
+    return x * x;
+}
+
+int main() {
+    double area = PI * r * r;      // PI 是真正的变量，调试器可见
+    int arr[MAX_BUFFER];           // 编译时常量，安全
+    
+    // 在局部作用域定义
+    constexpr int LOCAL_MAX = 100; // 只在当前作用域有效
+    
+    int result = square(a + b);    // 普通函数调用，没有宏的陷阱
+}
+```
+
+C++17之前，跨文件共享常量麻烦
+```cpp
+// ❌ 传统方式：需要在 .h 声明，在 .cpp 定义
+// constants.h
+extern const int GLOBAL_VALUE;
+```
+---
+```cpp
+// constants.cpp
+const int GLOBAL_VALUE = 42;
+```
+---
+```cpp
+// 如果只想用宏，但没有类型安全
+#define GLOBAL_VALUE 42
+```
+---
+`inline`变量可以单文件定义，跨文件使用
+```cpp
+// ✅ 直接在一个头文件中定义即可
+// constants.h
+inline constexpr int GLOBAL_VALUE = 42;  // inline + constexpr 完美组合
+
+// 其他任何文件包含这个头文件，使用的都是同一个变量
+```
 
 ## volatile关键字
 当对象值可能在程序的控制或检测之外被改变时，应该将该对象声明为 violatile，告知编译器不用归该对象进行优化。
