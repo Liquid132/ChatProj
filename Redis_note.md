@@ -1,6 +1,6 @@
 <style>
     p {
-        text-indent: 2em; /* 首行缩进2字符 */
+        text-indent: 2em; /* 首行缩进2字符 */d
     }
 </style>
 ### Redis 常见数据类型
