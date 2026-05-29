@@ -252,6 +252,42 @@ class MyClass {
 };
 int MyClass::class_var = 0;
 ```
+
+虽然函数体内定义了一个静态局部变量，函数体外仍然可以定义一个同名变量，因为该静态局部变量的作用于仅限定义它的函数体`{}`内部
+
+```cpp
+#include <iostream>
+
+int value = 100;  // 全局变量
+
+void testFunc() {
+    static int value = 0;  // 静态局部变量，和全局变量同名
+    value++;
+    std::cout << "函数内的静态局部变量 value: " << value << std::endl;
+}
+
+int main() {
+    std::cout << "全局变量 value: " << value << std::endl;
+    
+    testFunc();  // 输出 1
+    testFunc();  // 输出 2
+    testFunc();  // 输出 3
+    
+    std::cout << "全局变量 value 仍然是: " << value << std::endl;  // 还是 100
+    
+    return 0;
+}
+```
+
+输出结果
+```txt
+全局变量 value: 100
+函数内的静态局部变量 value: 1
+函数内的静态局部变量 value: 2
+函数内的静态局部变量 value: 3
+全局变量 value 仍然是: 100
+```
+
 ---
 
 ## 数据结构核心知识笔记
