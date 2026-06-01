@@ -1073,6 +1073,8 @@ const char* max<const char*>(const char* a, const char* b) {
 }
 ```
 
+上例中，`max<const char*>`用于说明这里是一个特殊模板。可以省略，编译器按照上文`template<>`自动推导，不过不建议
+
 template <> 告诉编译器"这是一个特化版本"
 
 max<const char*> 明确指定这个特化是针对 const char* 类型的
@@ -1105,7 +1107,7 @@ int main()
 5
 */
 ```
-对arr进行sizeof操作时，发生**数组退化**（即warning所说内容），实际传入的是一个指针，因此64位系统得到的 "sizeof(arr)" 结果为8
+对arr进行sizeof操作时，发生**数组退化**（即warning所说内容），实际传入的是一个指针，因此64位系统得到的 "sizeof(*arr)" 结果为8
 
 ```cpp
 template<size_t N>
