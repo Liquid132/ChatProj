@@ -1,0 +1,6 @@
+- 登录时GateServer从StatusServer查询聊天服务，如何达到**负载均衡**？
+- ChatServer（多线程、iocontext池提高并发性能、智能指针实现伪闭包延长对象生命周期）使用asio（两种模式：线程池模式、iocontext服务模式）实现TCP可靠长连接异步通信转发，采用多线程模式封装iocontext池提升并发性能
+- 数据存储：
+  - MySQL（使用mysqlconnecter库封装连接池）
+  - redis，封装redis连接池处理缓存数据
+  - grpc连接池保证多服务并发访问
