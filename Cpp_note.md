@@ -2337,6 +2337,11 @@ int* ptr = &a;   // ptr 是指针
 | `&other` | 被引用的`MyString`对象地址 |
 | `this` | 指向当前对象(`*this`)内存地址的指针 |
 | `*this` | 当前对象 |
+`this`为指针，对其解引用得到`this`所指对象，即内存中的当前实体。逻辑上`*this`是当前对象
+
+对一个指针解引用，得到的结果是一个引用，因此`*this`的类型为`Mystring&`
+
+
 2. `.`和`->`
 **相关语法规则**
 
@@ -2344,7 +2349,7 @@ int* ptr = &a;   // ptr 是指针
 | :-- | :-- | :-- | :-- |
 | 对象 | `MyString obj` | `obj.data` | 使用`.`访问 |
 | 引用 | `MyString& ref = obj` | `ref.data` | 同上 |
-| 指针 | `MyString* ptr = &obj | `ptr->data`或`(*ptr).data` | 使用`->` |
+| 指针 | `MyString* ptr = &obj` | `ptr->data`或`(*ptr).data` | 使用`->` |
 3. 返回类型
 如上所述
 
