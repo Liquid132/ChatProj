@@ -3642,7 +3642,7 @@ public:
 class Square : public ShapeBase<Square> {
 public:
     void draw() const {
-        std::cout << "o" << std::endl;
+        std::cout << "O" << std::endl;
     }
 };
 
@@ -3655,3 +3655,96 @@ void drawShape(const ShapeBase<T>& shape) {
 }
 ```
 2. 代码复用
+```cpp
+// 提供 Clone 功能的 Mixin
+template<typename Derived>
+class Cloneable {
+public:
+    Derived clone() const {
+        return static_cast<const Derived&>(*this);
+    }
+};
+
+class Person : public Cloneable<Person> {
+public:
+    std::string name;
+    int age;
+    // 不需要重复实现 clone()
+};
+
+class Document : public Cloneable<Document> {
+public:
+    std::string title;
+    std::string content;
+    // 也不需要重复实现 clone()
+};
+
+// 使用
+Person p{"Alice", 30};
+Person p2 = p.clone();  // 自动获得 clone 能力
+```
+
+经典用例
+- 统计实例数量
+```cpp
+template<typename T>
+class Counter {
+    static inline int count = 0;
+public:
+    Counter() { ++count; }
+    ~Counter() { --count; }
+    static int getCount() { return count; }
+};
+
+class Dog : public Counter<Dog> {
+    // Dog 自动获得计数能力
+};
+
+class Cat : public Counter<Cat> {
+    // Cat 独立计数（不同类型的 count 是独立的）
+};
+
+int main() {
+    Dog d1, d2;
+    Cat c1;
+    std::cout << Dog::getCount() << std::endl;  // 输出 2
+    std::cout << Cat::getCount() << std::endl;  // 输出 1
+}
+```
+- 单例模式
+```cpp
+template<typename T>
+class Singleton {
+protected:
+    Singleton() = default;
+    ~Singleton() = default;
+
+public:
+    Singleton(const Singleton&) = delete;
+    Singleton& operator=(const Singleton&) = delete;
+
+    static T& get_instance() {
+        static T instance;
+        return instance;    // 返回引用，满足单例模式全局只有一个实例的要求
+    }
+};
+
+class ConfigManager : public Singleton<ConfigManager> {
+    // 自动获得单例能力
+    friend class Singleton<ConfigManager>;  // 允许基类访问构造函数
+private:
+    ConfigManager() = default;  // 私有构造
+public:
+    void load() { /* ... */ }
+};
+
+// 使用
+ConfigManager& mgr = ConfigManager::getInstance();
+mgr.load();
+```
+
+示例中，`Singleton`是一个模板类。模板的实例化发生在编译期，编译器需要看到完整的定义才能为`ConfigManager`生成代码。所以，模板类的实现通常都必须写在头文件里
+
+instance 的类型本身就是 T，而函数的返回类型是 T&。把一个变量名当作引用返回，不会产生新的对象，也不会改变类型。
+可以理解为“把 instance 这个左值，绑定到函数的返回值引用上”。这个过程叫做左值到左值引用的绑定，是语言内建的标准行为，不涉及类型转换
+- 接口复用

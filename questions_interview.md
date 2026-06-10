@@ -79,3 +79,31 @@ public:
 new和new[]会在内存中记录不同元数据，后者会在内存块头部记录数组大小（元素个数），delete[]会读取这个信息柱哥调用析构函数；delete只会调用第一个元素的析构函数
 
 ### 手撕memcpy
+```cpp
+# include <cstddef>     // std::size_t
+
+void* my_memcpy(void* dest, const void* src, std::size_t count) {
+    void* result = dest;
+    // 判断无效情况
+    if (dest == nullptr || src == nullptr || count = 0) {
+        return result;
+    }
+    // 使用无符号字符（1字节）避免符号扩展问题
+    unsigned char* d = static_cast<unsigned char*>(dest);
+    const unsigned char* s = static_cast<const unsigned char*>(src);
+    // 得到复制和源的低地址，判断是否存在风险区域
+    if (d < s) {
+        // 无风险
+        for (std::size_t i = 0; i < count; i++) {
+            d[i] = s[i];
+        }
+    } else {
+        // 需从高位开始
+        for (std::size_t i = count-1; i >=0; i--) {
+            d[i] = s[i];
+        }
+    }
+    return result;
+}
+```
+`size_t`是C++中专门用于表示对象大小、数组长度的**无符号整数**类型，通常由`sizeof`返回。一般用于表示内存大小、数组索引、循环大小。在此例中，`size_t`用于表示内存中的字节数量。`sizeof`,`strlen`,`malloc`等内存相关标准库函数均采用`size_t`
