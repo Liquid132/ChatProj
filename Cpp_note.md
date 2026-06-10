@@ -3514,3 +3514,144 @@ int main() {
     return 0;
 }
 ```
+
+###**C++17新方法**`nth_element`
+```cpp
+template <class RandomIt, class Compare>
+void nth_element(RandomIt first, RandomIt nth, RandomIt last, Compare comp);
+```
+第 nth 位置的元素，就是如果完全排序后应该出现在该位置的元素
+所有在 `[first, nth)` 的元素都 ≤（或根据 comp 不小于）第 nth 元素
+所有在 `[nth, last)` 的元素都 ≥（或根据 comp 不大于）第 nth 元素
+
+示例：寻找前k个高频元素（leetcode347）
+```cpp
+class Solution {
+public:
+    vector<int> topKFrequent(vector<int>& nums, int k) {
+        unordered_map<int, int> freq;
+        // 统计所有元素的频率
+        for (int num : nums) {
+            freq[num] ++;
+        }
+        // 使用vector存储频率对
+        vector<pair<int, int>> vec(freq.begin(), freq.end());
+        // 使用nth_element，按照频率排列
+        nth_element(vec.begin(), vec.begin()+k-1, vec.end(), [](pair<int, int>&a, pair<int, int>&b) {
+            return a.second > b.second;
+        });
+        vector<int> result;
+        for (int i = 0; i < k; i++) {
+            result.push_back(vec[i].first);
+        }
+        return result;
+    }
+};
+```
+此例中，前k个元素都是频率大于等于第k-1位置元素的，通过lamda表达式决定comp规则
+
+###`std::unique_ptr::get()`
+`get`方法用于从智能指针中获取原始裸指针。它不参与内存管理，不转移指针所有权，无法使用`delete`，返回的裸指针不会造成内存泄露。指针内存释放仍由`unique_ptr`析构时完成
+
+```cpp
+// ❌ unique_ptr 不能拷贝
+Node node = root;  // 编译错误
+
+// ❌ 会转移所有权
+Node* node = root.release();  // root 失去所有权！
+
+// ✅ get() 只查看，不转移
+Node* node = root.get();  // 安全！
+```
+
+### 最大堆`Max Heap`
+LeetCode215题，寻找第k大的元素
+```cpp
+class Solution {
+public:
+    int findKthLargest(vector<int>& nums, int k) {
+        // 原地建大顶堆
+        make_heap(nums.begin(), nums.end());  // STL的堆化，O(n)
+        
+        for (int i = 0; i < k - 1; i++) {
+            // 弹出堆顶（最大元素）
+            pop_heap(nums.begin(), nums.end() - i);  // O(log n)
+        }
+        
+        return nums[0];  // 现在的堆顶是第k个最大
+    }
+};
+```
+
+`pop_heap`方法：
+```cpp
+void pop_heap(RandomIt first, RandomIt last);
+// 将 [first, last) 范围内的最大元素移动到 last-1 位置(下标)
+// 然后重新调整 [first, last-1) 为堆
+```
+
+### CRTP奇异递归模板
+派生类将自己作为模板参数传递给基类，使得基类能够使用派生类的成员
+```cpp
+// CRTP 的典型形态
+template<typename Derived>
+class Base {
+    // 基类可以使用 Derived 的成员
+};
+
+class Derived : public Base<Derived> {  // 把自己传给基类
+    // ...
+};
+```
+
+CRTP主要解决以下问题：
+1. 静态多态(编译时多态)
+```cpp
+// 动态多态
+class Shape {
+public:
+    // 虚函数，存在运行开销
+    virtual void draw() const = 0;  // `=0`声明纯虚函数，告诉编译器需要有派生类实现
+    virtual ~Shape() = default;
+};
+
+class Circle : public Shape {
+public:
+    void draw() const override {
+        std::cout << "o" << std::endl;
+    }
+};
+```
+```cpp
+// CRTP方式
+template<typename Derived>
+class ShapeBase{
+public:
+    void draw() const {
+        static_cast<const Derived*>(this)->draw();  // 编译时进行绑定
+    }
+}
+
+class Cricle : public ShapeBase<Cricle> {
+public:
+    void draw() const {
+        std::cout << "o" << std::endl;
+    }
+};
+
+class Square : public ShapeBase<Square> {
+public:
+    void draw() const {
+        std::cout << "o" << std::endl;
+    }
+};
+
+// 使用函数模板提供统一接口，用于操作ShapeBase的派生对象
+
+
+template<typename T>
+void drawShape(const ShapeBase<T>& shape) {
+    shape.draw();  // 编译时确定调用哪个 draw
+}
+```
+2. 代码复用
