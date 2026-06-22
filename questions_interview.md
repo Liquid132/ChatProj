@@ -42,6 +42,13 @@ struct Person {
 - 默认使用`emplace_back`，更灵活高效
 - **不可拷贝类型**只能用`emplace_back`
 - 初始化列表场景可以使用`push_back`
+- `noexcept`声明函数不返回任何异常(比如不生成栈展开的额外代码)。移动语义本质为指针所有权转移，不涉及新的内存分配，因此一般不会抛出异常。`std::vector`扩容时，如果移动构造函数是`noexcept`，优先使用移动语义；如果不是则退化为拷贝语义。
+
+| 类型 | 符号 | 含义 |
+| :-- | :-- | :-- |
+| 左值引用 | `T&` | 指向可寻址、有名字的变量 |
+| 右值引用 | `T&&` | 指向即将销毁的临时对象 |
+| 常引用 | `const T&` | 能绑定左或右值，但只能读 |
 
 写一个类的复制拷贝函数(深拷贝问题)
 ```cpp
@@ -82,7 +89,7 @@ public:
 */
 };
 ```
-new和new[]会在内存中记录不同元数据，后者会在内存块头部记录数组大小（元素个数），delete[]会读取这个信息柱哥调用析构函数；delete只会调用第一个元素的析构函数
+new和new[]会在内存中记录不同元数据，后者会在内存块头部记录数组大小（元素个数），delete[]会读取这个信息逐个调用析构函数；delete只会调用第一个元素的析构函数
 
 ### `map`和`unordered_map`的区别及使用场景
 | 特性 | `std::map` | `std::unordered_map` |
@@ -784,6 +791,114 @@ vec.push_back(2);
 vector<int> vec{1, 2};
 ```
 5. 范围for循环
+
+### 能否自己写一个RAII类？
+```cpp
+#include <iostream>
+#include <stdexcept>
+#include <cstring>
+
+// 自定义RAII类，管理动态内存
+template<typename T>
+class My_unique_ptr{
+private:
+    T* ptr;     // 对象
+
+public:
+    // 构造函数，获取资源
+    explicit My_unique_ptr(T* p = nullptr): ptr(p) {
+        std::cout << "获取资源：" << ptr << std::endl;
+    }
+    // 析构函数，释放资源
+    ~ My_unique_ptr() {
+        if (ptr) {
+            std::cout << "释放资源：" << ptr <<std::endl;
+        }
+        delete ptr;
+    }
+    // 禁止拷贝，防止double delete
+    My_unique_ptr(const My_unique_ptr&) = delete;
+    My_unique_ptr& opetator=(const My_unqiue_ptr&) = delete;
+    // 移动语义，转移资源
+    My_unique_ptr(My_unique_ptr&& other) noexcept : ptr(other.ptr) {
+        other.ptr = nullptr;
+        std::cout << "移动构造，转移所有权" << std::endl;
+    }
+    My_unique_ptr& operator=(My_unique_ptr&& other) noexcept {
+        if (this != &other) {
+            delete ptr; // 释放当前资源
+            ptr = other.ptr;    // 接管新资源
+            other.ptr = nullptr;
+            std::cout << "移动幅值，转移所有权" << endl;
+        }
+        return *this;
+    }
+    // 5. 访问接口
+    T& operator*() const { return *ptr; }
+    T* operator->() const { return ptr; }
+    T* get() const { return ptr; }
+
+    // 6. 显式释放（可选）
+    void reset(T* p = nullptr) {
+        if (ptr != p) {
+            delete ptr;
+            ptr = p;
+        }
+    }
+};
+
+// 使用示例
+class Person {
+public:
+    int age;
+
+    Person(const std::string& n, int a) : name(n), age(a) {
+        std::cout << "Person构造" << name << std::endl;
+    }
+    ~Person() {
+        std::cout << "Person析构" << name << std::endl;
+    }
+    void speak() const {
+        std::cout << "我是 " << name << "，今年 " << age << " 岁" << std::endl;
+    }
+};
+
+int main() {
+    std::cout << "=== 测试1：正常生命周期 ===\n";
+    {
+        My_unique_ptr<Person> p1(new Person("Alice", 25));
+        p1->speak();  // 使用箭头运算符
+        (*p1).speak(); // 使用解引用运算符
+        // p1 离开作用域时自动释放
+    }
+    std::cout << "p1 已析构，内存已释放\n\n";
+
+    std::cout << "=== 测试2：移动语义 ===\n";
+    {
+        My_unique_ptr<Person> p2(new Person("Bob", 30));
+        My_unique_ptr<Person> p3 = std::move(p2);  // 移动构造，所有权转移
+        
+        if (p2.get() == nullptr) {
+            std::cout << "p2 现在是空指针\n";
+        }
+        p3->speak();
+        // p3 离开作用域时释放资源
+    }
+    std::cout << "p3 已析构，内存已释放\n\n";
+
+    std::cout << "=== 测试3：异常安全 ===\n";
+    try {
+        My_unique_ptr<Person> p4(new Person("Charlie", 35));
+        throw std::runtime_error("发生异常！");
+        // 即使抛异常，p4 的析构函数依然会被调用
+    } catch (const std::exception& e) {
+        std::cout << "捕获异常: " << e.what() << std::endl;
+        // p4 已经在栈展开时被析构，内存已释放
+    }
+
+    return 0;
+}
+```
 ```cpp
 // before
 for(vector<int>::iterator it = vec.begin();
