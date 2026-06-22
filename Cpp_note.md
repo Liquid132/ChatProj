@@ -1282,6 +1282,34 @@ str2 += " world";                // 自动扩容
 |算法配合 | 不直接支持 | 支持STL算法 |
 `std::string`不使用 `strlen` 和 `sizeof`，而是用 `.size()` 或 `.length()` 方法来获取字符串长度。`\0`不参与`std::string`的长度计算
 
+RAII原则:利用对象的生命周期（构造和析构）来管理资源的生命周期，确保资源在任何情况下都能被正确释放
+- 获取即初始化：在对象构造时获取资源（内存、文件句柄、锁等）
+- 析构即释放：在对象析构时释放资源（保证不会遗忘）
+- 栈上管理：对象在栈上分配，作用域结束时自动析构
+```cpp
+// ✅ RAII：用对象管理资源
+#include <memory>
+#include <fstream>
+#include <mutex>
+
+void good_example() {
+    // 1. 内存：智能指针自动管理
+    std::unique_ptr<int[]> p = std::make_unique<int[]>(100);
+    
+    // 2. 文件：fstream 在析构时自动 close()
+    std::ifstream file("data.txt");
+    
+    // 3. 锁：std::lock_guard 在析构时自动 unlock()
+    std::mutex mtx;
+    std::lock_guard<std::mutex> lock(mtx);
+    
+    // 即使这里抛异常，上面三个资源也会自动释放！
+}
+```
+RAII使用对象管理资源，即使`return`早退或异抛出异常，对象析构函数依然会被调用
+
+RAII的核心机制：栈展开，异常抛出时，C++会调用栈上所有对象的析构函数，销毁栈上所有对象
+
 # C++编译
 
 C++的编译过程经过了预处理、编译、汇编和链接四个主要阶段
@@ -2995,7 +3023,7 @@ struct example {
 ### 类型推导和简化语法
 | 名称 | 描述 | 示例 |
 | :-- | :-- | :-- |
-| `auto` | 自动推导变量类型，简化复杂类型声明（如迭代器）| `auto x = 42` |
+| `auto` | 自动推导变量类型，简化复杂类型声明（如迭代器），会去掉`const`和`&` | `auto x = 42` |
 | `decltype` | 推导表达式类型，保留 const 和引用属性，适用于模板编程 | `int i=1; decltype(i) j = i;`|
 
 `decltype`推导出的类型会原样保留表达式的`const / volatile`属性、左右值引用属性，而`auto`通常会丢弃
