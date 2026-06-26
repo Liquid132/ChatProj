@@ -2676,6 +2676,121 @@ int safe_find(int key) {
 #### list
 - 插入操作(`insert`)和接合操作(`splice`)不会造成原有的list迭代器失效
 
+`splice`操作
+- 函数原型
+```cpp
+#include <list>
+using namespace std;
+
+list<int> lst1, lst2;
+
+// 1. 转移整个 list
+void splice(const_iterator pos, list& other);
+void splice(const_iterator pos, list&& other);  // C++11 右值引用
+
+// 2. 转移单个元素
+void splice(const_iterator pos, list& other, const_iterator it);
+void splice(const_iterator pos, list&& other, const_iterator it);
+
+// 3. 转移范围 [first, last)
+void splice(const_iterator pos, list& other, 
+            const_iterator first, const_iterator last);
+```
+转移整个list
+```cpp
+#include <iostream>
+#include <list>
+using namespace std;
+
+int main() {
+    list<int> lst1 = {1, 2, 3, 4, 5};
+    list<int> lst2 = {10, 20, 30};
+    
+    // 将 lst2 所有元素转移到 lst1 的 begin() 位置
+    lst1.splice(lst1.begin(), lst2);
+    
+    cout << "lst1: ";
+    for (int x : lst1) cout << x << " ";  // 10 20 30 1 2 3 4 5
+    cout << "\nlst2: ";
+    for (int x : lst2) cout << x << " ";  // (空)
+    
+    return 0;
+}
+```
+转移单个节点
+```cpp
+#include <iostream>
+#include <list>
+using namespace std;
+
+int main() {
+    list<int> lst1 = {1, 2, 3, 4, 5};
+    list<int> lst2 = {10, 20, 30, 40, 50};
+    
+    // 找到 lst2 中的 30
+    auto it = lst2.begin();
+    advance(it, 2);  // 移动到第3个元素
+    
+    // 将 30 转移到 lst1 的末尾
+    lst1.splice(lst1.end(), lst2, it);
+    
+    cout << "lst1: ";
+    for (int x : lst1) cout << x << " ";  // 1 2 3 4 5 30
+    cout << "\nlst2: ";
+    for (int x : lst2) cout << x << " ";  // 10 20 40 50
+    
+    return 0;
+}
+```
+转移范围
+```cpp
+#include <iostream>
+#include <list>
+using namespace std;
+
+int main() {
+    list<int> lst1 = {1, 2, 3, 4, 5};
+    list<int> lst2 = {10, 20, 30, 40, 50};
+    
+    // 找到范围 [20, 40)
+    auto first = lst2.begin();
+    advance(first, 1);   // 指向 20
+    auto last = lst2.begin();
+    advance(last, 4);    // 指向 50
+    
+    // 将 [20, 30, 40) 转移到 lst1 的 begin()
+    lst1.splice(lst1.begin(), lst2, first, last);
+    
+    cout << "lst1: ";
+    for (int x : lst1) cout << x << " ";  // 20 30 40 1 2 3 4 5
+    cout << "\nlst2: ";
+    for (int x : lst2) cout << x << " ";  // 10 50
+    
+    return 0;
+}
+```
+
+如果想访问其他位置，可以使用`std::next`
+```cpp
+#include <iostream>
+#include <list>
+using namespace std;
+
+int main() {
+    list<int> lst = {10, 20, 30, 40, 50};
+    
+    // 获取第二个节点的迭代器（索引从0开始）
+    auto it = next(lst.begin(), 1);  // 跳过1个元素，到达第2个
+    cout << *it;  // 输出 20
+    
+    // 获取第3个节点
+    auto it3 = next(lst.begin(), 2);
+    cout << *it3;  // 输出 30
+    
+    return 0;
+}
+```
+
 #### deque
 - 在`deque`容器首部或者尾部插入元素，不会使得任何迭代器失效
 - 在`deque`容器的任何其他位置进行插入或删除操作都将使指向该容器元素的所有迭代器失效
@@ -3023,10 +3138,23 @@ struct example {
 ### 类型推导和简化语法
 | 名称 | 描述 | 示例 |
 | :-- | :-- | :-- |
-| `auto` | 自动推导变量类型，简化复杂类型声明（如迭代器），会去掉`const`和`&` | `auto x = 42` |
+| `auto` | 自动推导变量类型，简化复杂类型声明（如迭代器），会去掉`&`，`const`视情况而定 | `auto x = 42` |
 | `decltype` | 推导表达式类型，保留 const 和引用属性，适用于模板编程 | `int i=1; decltype(i) j = i;`|
 
 `decltype`推导出的类型会原样保留表达式的`const / volatile`属性、左右值引用属性，而`auto`通常会丢弃
+
+实际上,对于顶层`const`,`auto`会去掉,底层则给予保留
+```cpp
+const int x = 10;
+auto a = x;        // a 的类型是 int（const被去掉了？）
+
+const int* const p = &x;
+auto p1 = p;       // p1 的类型是 const int*（底层const保留，顶层const去掉）
+
+// 但这样会保留const
+const auto a = x;  // 显式加上const
+auto& b = x;       // b 是 const int&（保留了const）
+```
 
 ```cpp
 #include <iostream>
