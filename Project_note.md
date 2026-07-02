@@ -1,4 +1,7 @@
 ## 如何利用asio实现tcp服务
+利用asio多线程模式，根据CPU核数封装连接池，每个连接池跑在独立线程，使用异步`async_read`和`async_write`方式读写，通过消息回调完成数据收发，每个连接通过session类进行管理，底层绑定用户id和session，回调函数根据session反向查找用户进行消息推送。通过`tlv`方式(消息id，消息长度，消息体)封装消息包防止粘包
+
+
 ### asio的Proactor模式
 
 
@@ -60,7 +63,7 @@ GateServer
 **组件**
 1. `io_context` 与操作系统交互，负责调度所有异步任务。使用`io_context.run()`启动事件循环
 2. `socket` 网络通信接口，对应TCP、UDP等协议的通信端点
-3. `timer` 定时器，用于处理超市或执行周期性任务
+3. `timer` 定时器，用于处理超时或执行周期性任务
 4. `strand` 线程安全绳。多线程环境下调用同一个`socket`的方法，`strand`保证回调函数不并发执行，避免数据竞争
 
 `async`(`asynchronous, /āˈsiNGkrənəs/`)异步，在asio中是一种编程模式
