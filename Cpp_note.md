@@ -451,6 +451,89 @@ LRU（最近最少使用）缓存通常由**哈希表 + 双向链表**实现：
 | **其他差异** | • 可定义带参数的“函数式宏”<br>• 可跨多行（使用 `\` 续行）<br>• 可进行条件编译（`#ifdef` 等）<br>• 不受作用域限制（直到 `#undef`） | • 不能定义函数形式的常量<br>• 遵循 C++ 作用域规则<br>• 可与 `extern` 联合使用<br>• C++11 起支持 `constexpr`（编译期常量） |
 | **C++ 建议** | **尽量用 `const`（或 `constexpr`）替代 `#define`**<br>• Scott Meyers 《Effective C++》：<br>  **“宁以编译器替换预处理器”** | **推荐使用**<br>• 类型安全、易于调试<br>• 作用域可控<br>• 更适合现代 C++ 编程风格 |
 
+### `const`补充说明
+*拷贝初始化*：
+普通变量拷贝给const变量、const变量拷贝给普通变量都是允许的
+
+*引用*：
+```cpp
+int a = 10;
+
+const int &r = a;
+
+r = 20;      //错误
+```
+此例中const绑定的是引用，无法通过r修改a，但是a本身可以被修改
+```cpp
+int &r = 10;    // 错误
+const int &r = 10;  // 正确
+/** 实际相当于：
+* const int temp = 10;
+* const int &r = temp;
+*/
+```
+const引用可以绑定**字面值、表达式和临时对象**
+
+*指针*：
+```cpp
+// const修饰指针对象
+const int *p;    // 等价于int const *p;
+// const修饰对象本身
+int * const p;
+```
+```cpp
+int a = 10;
+const int b = 20;
+
+// ===== 拷贝 =====
+const int c = a;   // ✅ 普通 → const（拷贝）
+int d = b;         // ✅ const → 普通（拷贝）
+
+// ===== 引用 =====
+const int& r1 = a; // ✅ 普通 → const（权限缩小）
+int& r2 = b;       // ❌ const → 普通（权限扩大，禁止）
+
+// ===== 指针 =====
+const int* p1 = &a; // ✅ 普通 → const（权限缩小）
+int* p2 = &b;       // ❌ const → 普通（权限扩大，禁止）
+```
+*函数*：
+`void func(const string &str)`中的`const`意味着`str`在函数执行过程中不会被修改
+
+*成员函数*：
+```cpp
+class Person
+{
+public:
+
+    int age;
+
+    void print() const
+    {
+
+    }
+};
+```
+`const`修饰的是`this`指针，它意味着该函数不会修改当前`this`对象
+- 在非 const 成员函数中，this 的类型是 ClassName* const（指向非常量的常量指针）
+- 在 const 成员函数中，this 的类型是 const ClassName* const（指向常量的常量指针）
+```cpp
+class MyClass {
+    int value;
+    
+    void normalFunc() {
+        // this 的类型是 MyClass* const
+        this->value = 10;  // ✅ 可以修改成员
+    }
+    
+    void constFunc() const {
+        // this 的类型是 const MyClass* const
+        // this->value = 10;  // ❌ 错误：不能修改成员
+        cout << this->value; // ✅ 可以读取
+    }
+};
+```
+
 ## 典型错误示例对比
 
 ### `#define` 常见问题
