@@ -97,6 +97,12 @@ cout << suzeof(u9) << endl;     // 16
 | `class`    | `private`  |
 | `struct`   | `public`   |
 
+| 访问权限 | 类内 | 派生类内 | 外部函数 |
+| :-- | :-- | :-- | :-- |
+| `public` | 可 | 可 | 可 |
+| `protected` | 可 | 可 | 不可 |
+| `private` | 可 | 不可 | 不可 |
+
 > ⚠️ 注意：基类类型不影响继承权限，只影响其成员默认访问（class=private, struct=public）。
 
 ### 关键点
@@ -2764,6 +2770,30 @@ int safe_find(int key) {
     auto it = my_map.find(key);
     return (it != my_map.end()) ? it->second : -1;
 }
+```
+
+#### STL容器存储分配
+```cpp
+vector<int> v(1000);     // 数据在堆上
+deque<int> d(1000);      // 数据在堆上（分段存储）
+list<int> l(1000);       // 节点在堆上
+set<int> s;              // 节点在堆上
+map<int, int> m;         // 节点在堆上
+unordered_set<int> us;   // 节点在堆上
+queue<int> q;            // 底层默认用 deque，数据在堆上
+stack<int> st;           // 底层默认用 deque，数据在堆上
+```
+这类数据对象存储在栈上，对象中含有一个指针，指向堆中的真正数据
+
+```cpp
+array<int, 100> arr;    // 所有数据在栈上！(没有堆分配)
+string str = "hello";   // 小字符串在栈上，大字符串在堆上（SSO优化）
+stack<int> s;           // 底层容器是 deque（数据在堆上）
+queue<int> q;           // 底层容器是 deque（数据在堆上）
+priority_queue<int> pq;  // 底层容器是 vector（数据在堆上）
+vector<bool> vb(1000);  // 特殊！不是存储 bool 数组
+                        // 实际存储：位压缩，1个bool占1位
+                        // 但数据仍在堆上
 ```
 
 ### 容器遍历时插入
