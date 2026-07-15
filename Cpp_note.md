@@ -215,6 +215,12 @@ public:
     // 正确，静态成员变量可以作为成员函数的参数
     void fun1(int i = s_var); 
     // error: invalid use of non-static 
+    /** 
+    * s_var 是静态成员变量，属于类本身，在编译时它的地址和值就已经确定，
+    * 所以可以作为默认参数。
+    * var 是非静态成员变量，属于某个对象，在编译时没有具体值或地址，
+    * 所以不能作为默认参数
+    */
     void fun2(int i = var);   
     data member 'A::var'
 };
@@ -230,7 +236,7 @@ class A
 {
 public:
     static A s_var; // 正确，静态数据成员
-    A var;          // error: field 'var' has incomplete type 'A'
+    A var;          // error: field 'var' has incomplete type 'A' 会导致无限递归
     A *p;           // 正确，指针
     A &var1;        // 正确，引用
 };
@@ -3911,6 +3917,87 @@ public:
 };
 ```
 
+**最大堆和最小堆**
+```cpp
+#include <iostream>
+#include <queue>
+using namespace std;
+
+int main() {
+    // 默认：less（最大堆）
+    priority_queue<int> maxHeap;    // 等价于priority_queue<int, vector<int>, less<int>> maxHeap;
+    maxHeap.push(3);
+    maxHeap.push(1);
+    maxHeap.push(4);
+    maxHeap.push(2);
+    
+    cout << "最大堆（默认 less）: ";
+    while (!maxHeap.empty()) {
+        cout << maxHeap.top() << " ";  // 4 3 2 1
+        maxHeap.pop();
+    }
+    cout << endl;
+    
+    // greater（最小堆）
+    priority_queue<int, vector<int>, greater<int>> minHeap;
+    minHeap.push(3);
+    minHeap.push(1);
+    minHeap.push(4);
+    minHeap.push(2);
+    
+    cout << "最小堆（greater）: ";
+    while (!minHeap.empty()) {
+        cout << minHeap.top() << " ";  // 1 2 3 4
+        minHeap.pop();
+    }
+    cout << endl;
+    
+    return 0;
+}
+```
+
+LeetCode 347题，寻找前k高频元素
+```cpp
+class Solution {
+public:
+    vector<int> topKFrequent(vector<int>& nums, int k) {
+        // 1. 统计频率
+        unordered_map<int, int> freq;
+        for (int num : nums) {
+            freq[num]++;
+        }
+        
+        // 2. 定义最小堆：pair<频率, 元素>
+        // 使用 greater 创建最小堆
+        priority_queue<pair<int, int>, 
+                       vector<pair<int, int>>, 
+                       greater<pair<int, int>>> minHeap;
+        
+        // 3. 遍历频率表
+        for (auto& [num, count] : freq) {
+            if (minHeap.size() < k) {
+                // 堆未满，直接入堆
+                minHeap.push({count, num});
+            } else if (count > minHeap.top().first) {
+                // 当前频率大于堆顶（最小频率），替换
+                minHeap.pop();
+                minHeap.push({count, num});
+            }
+        }
+        
+        // 4. 提取结果
+        vector<int> result;
+        while (!minHeap.empty()) {
+            result.push_back(minHeap.top().second);
+            minHeap.pop();
+        }
+        // 注意：这里得到的是按频率从小到大，如果需要从大到小可以 reverse
+        reverse(result.begin(), result.end());
+        return result;
+    }
+};
+```
+
 `pop_heap`方法：
 ```cpp
 void pop_heap(RandomIt first, RandomIt last);
@@ -4051,7 +4138,7 @@ public:
     Singleton(const Singleton&) = delete;
     Singleton& operator=(const Singleton&) = delete;
 
-    static T& get_instance() {
+    static T& getInstance() {
         static T instance;
         return instance;    // 返回引用，满足单例模式全局只有一个实例的要求
     }

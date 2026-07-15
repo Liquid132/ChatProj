@@ -482,6 +482,35 @@ O(N)
 
 后面的元素都要向后移动。
 
+**删除：**
+```cpp
+#include <iostream>
+#include <vector>
+using namespace std;
+
+int main() {
+    vector<int> v = {1, 2, 3, 4, 5};
+    
+    // 方法1：删除单个元素（通过迭代器）
+    auto it = v.begin() + 2;  // 指向第3个元素（值为3）
+    v.erase(it);
+    // 结果：{1, 2, 4, 5}
+    
+    // 方法2：删除范围 [first, last)
+    v.erase(v.begin() + 1, v.begin() + 3);
+    // 删除索引1到2的元素（值为2和4）
+    // 结果：{1, 5}
+    
+    // 打印结果
+    for (int num : v) {
+        cout << num << " ";
+    }
+    cout << endl;
+    
+    return 0;
+}
+```
+
 ---
 
 #### list
@@ -773,6 +802,65 @@ int main() {
 }
 ```
 
+`resize`逻辑
+```cpp
+void resize(size_t new_size) {
+    if (new_size < _size) {
+        // 情况1：缩小，删除多余元素
+        // 析构多余的元素
+        for (size_t i = new_size; i < _size; ++i) {
+            _data[i].~T();  // 调用析构函数
+        }
+        _size = new_size;
+    } else if (new_size > _size) {
+        // 情况2：扩大，添加默认值
+        reserve(new_size);  // 确保容量足够
+        for (size_t i = _size; i < new_size; ++i) {
+            new (_data + i) T();  // placement new，默认构造
+        }
+        _size = new_size;
+    }
+    // 情况3：相等，什么都不做
+}
+```
+
+```cpp
+#include <iostream>
+#include <algorithm>
+#include <stdexcept>
+using namespace std;
+
+template<typename T>
+class my_vector{
+private:
+    T* data;
+    size_t size;
+    size_t capacity;
+public:
+    my_vector(): data(nullptr), size(0), capacity(0){}
+
+    my_vector(size_t size): data(nullptr), size(size), capacity(0) {
+        resize(n);
+    }
+
+    ~my_vector() {
+        clear();
+        delete[] data;
+    }
+
+    // 获取大小
+    size_t size() const { return size; }
+    size_t capacity() const { return capacity; }
+    bool empty() const { return size == 0; }
+
+    // 实现resize
+    // todo
+};
+```
+
+clear()函数用于从容器中删除所有元素。对于vector和string类型的容器.
+clear()函数并不会释放内存或将元素值设为零，而是将容器的大小（size）设置为0，同时保留原有的容量（capacity）
+
 ### STL中map的底层是如何实现的？红黑树为什么是相对平衡的？为什么不选择AVL？
 1. map底层使用红黑树实现，他满足：
    1. 元素按照Key自动有序
@@ -966,14 +1054,13 @@ MySql底层使用B+树：
 
 ### 介绍一下进程和线程的区别
 ![进程和线程](./Cpp_Picture/进程和线程.jpg)
-进程（Process）：
 
+进程（Process）：
 - 操作系统进行资源分配(虚拟内存、文件句柄、信号量等资源)的基本单位
 - 程序的一次执行过程，拥有独立的内存空间
 - 每个进程都有自己的代码段、数据段、堆栈段
 
 线程（Thread）：
-
 - 操作系统进行CPU调度的基本单位
 - 进程内的一个执行流，共享进程的资源
 - 同一个进程内的多个线程共享代码段、数据段、堆段，但有自己的栈段
@@ -1165,7 +1252,7 @@ POST：根据请求负荷（报文body）对指定的资源做出处理。不安
 - HTTPS 协议需要向 CA（证书权威机构）申请数字证书，来保证服务器的身份是可信的
 
 ### HTTP进行TCP连接后，在什么情况下会中断？
-1. 服务端或客户端只想close刺痛调用时，发送FIN报文，进行四次握手断开连接
+1. 服务端或客户端只想close系统调用时，发送FIN报文，进行四次握手断开连接
 2. 发送方发送数据后，接收方超过一段时间没有响应ACK报文，发送方重传数据达到最大次数的时候，就会断开TCP连接
 3. HTTP长时间没有进行请求和响应的时候，超过一定的时间，就会释放连接
 
@@ -1182,7 +1269,7 @@ DNS层级关系：
 - 顶级域 DNS 服务器（.com）
 - 权威 DNS 服务器（server.com）
 
-工作流程：
+客户端访问网页工作流程：
 1. 客户端首先会发出一个 DNS 请求，问 www.server.com 的 IP 是啥，并发给本地 DNS 服务器（也就是客户端的 TCP/IP 设置中填写的 DNS 服务器地址）。
 2. 本地域名服务器收到客户端的请求后，如果缓存里的表格能找到 www.server.com，则它直接返回 IP 地址。如果没有，本地 DNS 会去问它的根域名服务器：“老大， 能告诉我 www.server.com 的 IP 地址吗？” 根域名服务器是最高层次的，它不直接用于域名解析，但能指明一条道路。
 3. 根 DNS 收到来自本地 DNS 的请求后，发现后置是 .com，说：“www.server.com 这个域名归 .com 区域管理”，我给你 .com 顶级域名服务器地址给你，你去问问它吧。”
@@ -1204,7 +1291,7 @@ DNS层级关系：
 - **性能**：使用Cookie时，因为数据随每个请求发送到服务器，可能会影响网络传输效率，尤其是在Cookie数据较大时。使用Session时，因为数据存储在服务器端，每次请求都需要查询服务器上的Session数据，这可能会增加服务器的负载，特别是在高并发场景下
 
 ### token、session和cookie的区别?
-- session存储于服务器，可以理解为一个状态列表，拥有一个唯一识别符号sessionId，通常存放于cookie中。服务器收到cookie后解析出sessionId，再去session列表中查找，才能找到相应session，依赖cookie。
+- session存储于服务器，可以理解为一个状态列表，拥有一个唯一识别符号sessionId，通常存放于cookie中。服务器收到cookie后解析出sessionID，再去session列表中查找，才能找到相应session，依赖cookie。
 - cookie类似一个令牌，装有sessionId，存储在客户端，浏览器通常会自动添加。
 - token也类似一个令牌，无状态，用户信息都被加密到token中，服务器收到token后解密就可知道是哪个用户，需要开发者手动添加
 
