@@ -124,6 +124,28 @@ public:
 */
 };
 ```
+
+memcpy可以用于任意形式的拷贝strcpy则只适用于字符串
+```cpp
+// 使用 strcpy：只能处理以 '\0' 结尾的字符串
+strcpy(data, other.data);
+
+// 使用 memcpy：可以处理任意二进制数据
+memcpy(data, other.data, len);
+```
+
+```cpp
+MyClass& operator=(const MyClass& other) {
+    if (this != &other) {
+        delete[] data;
+        size_t len = strlen(other.data) + 1;  // 必须提前算长度
+        data = new char[len];
+        memcpy(data, other.data, len);        // 替换 strcpy
+    }
+    return *this;
+}
+```
+
 new和new[]会在内存中记录不同元数据，后者会在内存块头部记录数组大小（元素个数），delete[]会读取这个信息逐个调用析构函数；delete只会调用第一个元素的析构函数
 
 ### `map`和`unordered_map`的区别及使用场景
@@ -266,6 +288,51 @@ for_each()
 remove()
 reverse()
 ```
+
+`binary_search`对有序序列进行二分查找，默认序列升序排列
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+int main() {
+    vector<int> v = {1, 3, 5, 7, 9, 11};
+    
+    bool found = binary_search(v.begin(), v.end(), 7);
+    cout << (found ? "找到了" : "没找到") << endl;  // 输出：找到了
+    
+    found = binary_search(v.begin(), v.end(), 4);
+    cout << (found ? "找到了" : "没找到") << endl;  // 输出：没找到
+    
+    return 0;
+}
+```
+
+`lower_bound`返回有序序列中第一个“不小于”目标值的位置；`upper_bound`返回有序序列中第一个“大于”目标值的位置
+
+在降序序列中，需要使用lambda表达式来制定规则，如：
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+int main() {
+    vector<int> v = {9, 7, 5, 3, 1};  // 降序排列
+    
+    // 查找第一个不大于 5 的位置（即 <= 5）
+    auto it = lower_bound(v.begin(), v.end(), 5, [](const int& a, const int& b) {
+        return a > b;  // 表示序列是降序
+    });
+    
+    cout << "第一个不大于5的位置: " << (it - v.begin()) << endl;  // 输出 2（指向5）
+    cout << "该位置的元素: " << *it << endl;  // 输出 5
+    
+    return 0;
+}
+```
+
 以上为常用通用算法
 3. 迭代器
 4. 仿函数
