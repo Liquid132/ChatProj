@@ -811,6 +811,8 @@ std::unique_ptr<MyClass> uobj = std::make_unique<MyClass>(10, "test");
 
 std::shared_ptr<MyClass> sp = std::make_shared<MyClass>(10, "test");
 
+// 智能指针对象本身位于栈上，其所管理的对象则位于堆上
+
 // 自动释放，无需手动 delete
 ```
 ```text

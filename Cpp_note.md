@@ -1459,6 +1459,701 @@ RAII使用对象管理资源，即使`return`早退或异抛出异常，对象�
 
 RAII的核心机制：栈展开，异常抛出时，C++会调用栈上所有对象的析构函数，销毁栈上所有对象
 
+### C++ STL 比较器（Comparator）总结
+
+一、STL 中比较器的两种逻辑
+
+STL 中涉及比较器（Comparator）的算法，大体可以分为两类：
+
+1. **排序型（Ordering）**
+   - 比较器回答："a 是否应该排在 b 前面？"
+
+2. **优先级型（Priority）**
+   - 比较器回答："a 的优先级是否低于 b？"
+
+最大的区别就在这里。
+
+---
+
+二、排序型算法（Ordering）
+
+这一类算法遵循统一规则：
+
+> **cmp(a, b) == true**
+>
+> **表示 a 应该排在 b 前面。**
+
+因此：
+
+```cpp
+return a < b;
+```
+
+表示：
+
+> 升序排列。
+
+```cpp
+return a > b;
+```
+
+表示：
+
+> 降序排列。
+
+---
+
+#### 1、sort（最常用）
+
+默认：
+
+```cpp
+sort(v.begin(), v.end());
+```
+
+结果：
+
+```text
+1 2 3 4 5
+```
+
+升序。
+
+---
+
+自定义：
+
+```cpp
+sort(v.begin(), v.end(),
+    [](int a, int b)
+    {
+        return a > b;
+    });
+```
+
+结果：
+
+```text
+5 4 3 2 1
+```
+
+因为：
+
+```text
+cmp(a,b)
+
+↓
+
+true
+
+↓
+
+a 放前面
+```
+
+---
+
+#### 2、stable_sort
+
+规则和 sort 完全一样。
+
+区别：
+
+保持相同元素原来的顺序。
+
+例如：
+
+```cpp
+stable_sort(v.begin(), v.end(), cmp);
+```
+
+比较器逻辑：
+
+```
+与 sort 完全一致。
+```
+
+---
+
+#### 3、nth_element（LeetCode 高频）
+
+例如：
+
+```cpp
+nth_element(
+    vec.begin(),
+    vec.begin()+k,
+    vec.end(),
+    cmp
+);
+```
+
+比较器：
+
+```cpp
+[](auto& a, auto& b)
+{
+    return a.second > b.second;
+}
+```
+
+意思：
+
+```
+second大的
+
+↓
+
+放前面
+```
+
+和 sort 一模一样。
+
+区别：
+
+只有第 k 个元素正确。
+
+前后两边不保证有序。
+
+---
+
+#### 4、partial_sort
+
+作用：
+
+只排序前 k 个。
+
+例如：
+
+```cpp
+partial_sort(
+    begin,
+    begin+k,
+    end,
+    cmp
+);
+```
+
+比较器：
+
+```
+和 sort 完全一致。
+```
+
+---
+
+#### 5、is_sorted
+
+判断是否已经满足排序规则。
+
+例如：
+
+```cpp
+is_sorted(
+    begin,
+    end,
+    cmp
+);
+```
+
+比较器：
+
+```
+仍然表示：
+
+a 应排在 b 前。
+```
+
+---
+
+#### 6、lower_bound
+
+例如：
+
+```cpp
+lower_bound(
+    begin,
+    end,
+    x,
+    cmp
+);
+```
+
+注意：
+
+要求：
+
+整个区间已经按照
+
+```cpp
+cmp
+```
+
+排序。
+
+例如：
+
+```cpp
+return a>b;
+```
+
+那么：
+
+整个数组必须已经降序。
+
+否则：
+
+结果错误。
+
+---
+
+#### 7、upper_bound
+
+规则：
+
+和 lower_bound 完全一致。
+
+只是查找位置不同。
+
+---
+
+#### 8、binary_search
+
+同样：
+
+要求：
+
+整个序列按照
+
+```cpp
+cmp
+```
+
+排序。
+
+比较器逻辑：
+
+与 sort 一样。
+
+---
+
+#### 9、merge
+
+例如：
+
+```cpp
+merge(
+    first1,last1,
+    first2,last2,
+    output,
+    cmp
+);
+```
+
+要求：
+
+两个序列都已经按照 cmp 排序。
+
+cmp：
+
+仍然表示：
+
+```
+a 应该排前面
+```
+
+---
+
+#### 10、set_union / set_intersection
+
+要求：
+
+两个集合已经按照 cmp 排序。
+
+比较规则：
+
+与 sort 完全一致。
+
+---
+
+三、优先级型算法（Priority）
+
+这一类只有 Heap 系列。
+
+它们遵循另一套规则：
+
+> **cmp(a,b)==true**
+>
+> 表示
+>
+> **a 的优先级低于 b。**
+
+不是：
+
+```
+a 排前面。
+```
+
+---
+
+#### 1、priority_queue（最容易混）
+
+例如：
+
+```cpp
+priority_queue<
+    int,
+    vector<int>,
+    decltype(cmp)
+> pq(cmp);
+```
+
+如果：
+
+```cpp
+auto cmp=[](int a,int b)
+{
+    return a>b;
+};
+```
+
+表示：
+
+```
+大的
+
+↓
+
+优先级低
+```
+
+所以：
+
+```
+小的
+
+↓
+
+top()
+```
+
+得到：
+
+```
+最小堆
+```
+
+---
+
+如果：
+
+```cpp
+return a<b;
+```
+
+表示：
+
+```
+小的
+
+↓
+
+优先级低
+```
+
+于是：
+
+```
+大的
+
+↓
+
+top()
+```
+
+得到：
+
+```
+最大堆
+```
+
+---
+
+#### 2、make_heap
+
+例如：
+
+```cpp
+make_heap(
+    begin,
+    end,
+    cmp
+);
+```
+
+规则：
+
+与 priority_queue 完全一致。
+
+例如：
+
+```cpp
+return a>b;
+```
+
+得到：
+
+```
+最小堆
+```
+
+---
+
+#### 3、push_heap
+
+规则：
+
+完全一致。
+
+内部：
+
+如果：
+
+```cpp
+cmp(parent,child)
+```
+
+成立。
+
+说明：
+
+```
+parent
+
+优先级低
+```
+
+交换。
+
+---
+
+#### 4、pop_heap
+
+规则：
+
+与 push_heap 完全一致。
+
+---
+
+#### 5、sort_heap
+
+注意：
+
+虽然名字有：
+
+```
+sort
+```
+
+但是：
+
+比较器仍然使用：
+
+```
+Heap规则
+```
+
+不是：
+
+sort规则。
+
+---
+
+四、关联容器（set / map）
+
+例如：
+
+```cpp
+set<int, greater<int>>
+```
+
+这里：
+
+```cpp
+greater<int>
+```
+
+不是：
+
+优先级。
+
+而是：
+
+排序规则。
+
+例如：
+
+```cpp
+greater<int>()
+```
+
+表示：
+
+```
+大的
+
+放前面
+```
+
+于是：
+
+set：
+
+```
+5
+
+4
+
+3
+
+2
+```
+
+---
+
+map：
+
+```cpp
+map<int,string,greater<int>>
+```
+
+key：
+
+降序。
+
+---
+
+multiset
+
+规则：
+
+一样。
+
+---
+
+multimap
+
+规则：
+
+一样。
+
+---
+
+五、常见比较器对象
+
+STL 已经提供：
+
+```cpp
+less<T>
+```
+
+表示：
+
+```cpp
+a<b
+```
+
+升序。
+
+---
+
+```cpp
+greater<T>
+```
+
+表示：
+
+```cpp
+a>b
+```
+
+降序。
+
+例如：
+
+```cpp
+sort(v.begin(),v.end(),greater<int>());
+```
+
+得到：
+
+降序。
+
+---
+
+priority_queue：
+
+默认：
+
+```cpp
+less<int>
+```
+
+得到：
+
+```
+最大堆
+```
+
+改成：
+
+```cpp
+greater<int>
+```
+
+得到：
+
+```
+最小堆
+```
+
+---
+
+六、总结表（★★★★★）
+
+| STL 组件 | `cmp(a,b)==true` 的含义 | `return a<b` | `return a>b` |
+|----------|-------------------------|--------------|--------------|
+| sort | a 应排在 b 前 | 升序 | 降序 |
+| stable_sort | a 应排在 b 前 | 升序 | 降序 |
+| nth_element | a 应排在 b 前 | 第 k 小 | 第 k 大 |
+| partial_sort | a 应排在 b 前 | 前 k 小 | 前 k 大 |
+| lower_bound | 与排序规则一致 | 升序查找 | 降序查找 |
+| upper_bound | 与排序规则一致 | 升序查找 | 降序查找 |
+| binary_search | 与排序规则一致 | 升序查找 | 降序查找 |
+| merge | a 应排在 b 前 | 升序合并 | 降序合并 |
+| set / map | a 应排在 b 前 | 升序 | 降序 |
+| multiset / multimap | a 应排在 b 前 | 升序 | 降序 |
+| priority_queue | **a 的优先级低于 b** | 最大堆 | 最小堆 |
+| make_heap | **a 的优先级低于 b** | 最大堆 | 最小堆 |
+| push_heap | **a 的优先级低于 b** | 最大堆 | 最小堆 |
+| pop_heap | **a 的优先级低于 b** | 最大堆 | 最小堆 |
+
+---
+
+七、面试记忆口诀（★★★★★）
+
+**一句话记住所有 STL 比较器：**
+
+> **除了 Heap（priority_queue、make_heap、push_heap、pop_heap、sort_heap）这一族，其他几乎所有 STL 算法和关联容器都遵循同一个规则：`cmp(a,b)==true` 表示 "a 应该排在 b 前面"。**
+
+因此可以记成：
+
+- **排序算法（sort 家族）**：比较的是**顺序（Ordering）**。
+- **关联容器（set/map）**：比较的是**顺序（Ordering）**。
+- **堆算法（heap 家族）**：比较的是**优先级（Priority）**。
+
+真正特殊的，其实只有 **Heap 家族**。
+
 # C++编译
 
 C++的编译过程经过了预处理、编译、汇编和链接四个主要阶段
