@@ -6,8 +6,6 @@
 ### Redis 常见数据类型
 String, Hash, List, Set, Zset(有序集合)
 
-### Redis 数据类型笔记
-
 | 数据类型 | 结构存储的值 | 读写能力（核心操作） | 典型应用场景 |
 | :--- | :--- | :--- | :--- |
 | **String** | 字符串、整数、浮点数 | 对整个字符串进行设置/获取（SET/GET/MSET/MGET）<br>对字符串部分内容进行操作（GETRANGE/SETRANGE/APPEND/STRLEN）<br>对整数/浮点数进行自增自减（INCR/DECR/INCRBY/DECRBY） | 缓存对象、分布式锁、计数器、Session共享 |

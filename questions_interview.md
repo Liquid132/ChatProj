@@ -1454,3 +1454,24 @@ TCP 在刚建立连接完成后，首先进行慢启动。发送方每收到一�
 
 ## 部分真题
 ![HTTP](./Cpp_Picture/题目1.jpg)
+
+![数据模型](./Cpp_Picture/数据模型.png)
+![数据模型答案](./Cpp_Picture/数据模型答案.png)
+
+![网桥](./Cpp_Picture/网桥.jpg)
+![网桥](./Cpp_Picture/网桥答案.jpg)
+
+![ICMP](./Cpp_Picture/ICMP.jpg)
+![ICMP_ans](./Cpp_Picture/ICMP_ans.jpg)
+
+![并发](./Cpp_Picture/并发.jpg)
+
+![路由](./Cpp_Picture/路由聚合.jpg)
+
+将IP地址转换为二进制之后寻找共同前缀：
+
+`42.68.28.0` → 28 = `00011100`
+
+`42.68.18.0` → 18 = `00010010`
+
+`42.68.24.0` → 24 = `00011000`
