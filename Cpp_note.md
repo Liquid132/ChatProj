@@ -2396,7 +2396,7 @@ int main() {
 }
 ```
 
-**隐藏** 派生类的函数屏蔽了与其同名的基类函数，只要是同名函数，不管参数列表是否相同，基类函数都会被隐藏
+**隐藏** 派生类的函数**屏蔽了与其同名的基类函数**，只要是同名函数，不管参数列表是否相同，基类函数都会被隐藏
 
 ```cpp
 #include <iostream>
@@ -4036,7 +4036,7 @@ struct example {
 
 `decltype`推导出的类型会原样保留表达式的`const / volatile`属性、左右值引用属性，而`auto`通常会丢弃
 
-实际上,对于顶层`const`,`auto`会去掉,底层则给予保留
+实际上,对于顶层`const`,`auto`会去掉,底层则给予保留(顶层：指针本身为常量；底层：指针指向对象为常量)
 ```cpp
 const int x = 10;
 auto a = x;        // a 的类型是 int（const被去掉了？）
@@ -4080,6 +4080,25 @@ int main() {
 }
 ```
 表达式`decltype((x))`推导结果为`int&`,因为(x)是左值表达式，推导出来为左值引用
+C++14 引入`decltype(auto)`，结合两者的优点：用 auto 的语法，但使用 decltype 的推导规则。
+
+```cpp
+// 普通 auto：会忽略引用
+int x = 10;
+int& ref = x;
+auto a = ref;           // int（引用被忽略）
+
+// decltype(auto)：保留引用
+int x = 10;
+int& ref = x;
+decltype(auto) b = ref;  // int&（保留引用）
+
+// 函数返回：完美转发
+template<typename T>
+decltype(auto) forward_value(T&& t) {
+    return std::forward<T>(t);  // 保留左值/右值属性
+}
+```
 
 *推导规则表*
 | 表达式类型 | `decltype` 推导结果 | 示例代码 | 推导结果 |
