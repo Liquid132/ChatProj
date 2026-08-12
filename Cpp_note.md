@@ -4481,6 +4481,71 @@ int main() {
   - **异常退出** 异常导致栈展开时，`lock_guard`析构，释放锁
   - **手动释放** 使用`unique_lock`配合`unlock()`手动释放，但是不推荐
 
+`std::lock_guard`和`std::unique_lock`的区别
+| 区别 | `lock_guard` | `unique_lock` |
+| :-- | :-- | :-- |
+| 自动加、解锁 | 是 | 是（二者均为构造时加锁、析构时解锁） | 
+| 灵活性 | 低，只能严格控制生命周期 | 支持延迟加锁、手动解锁、尝试加锁等 |
+| 开销 | 小，纯RAII，无额外开销 | 大，需要维护状态标志 |
+| 是否支持移动 | 不支持 | 支持，可转移所有权 |
+| 是否配合条件变量 | 否 | 可以，如`wait()`必须使用`unique_lock` |
+| 使用场景 | 简单作用域维护，性能敏感场景 | 复杂场景、配合条件变量 |
+
+1. 锁的获取时机
+   - `lock_guard` 构造时立即加锁，无法延迟
+   ```cpp
+   std::mutex mtx;
+   ...
+   {
+       std::lock_guard<std::mutex> lock(mtx);  // 立即锁定
+   }   // 析构时自动解锁
+   ```
+   - `unique_lock` 可以延迟加锁、构造时可以不加锁
+   ```cpp
+   std::mutex mtx;
+   {
+       std::unique_lock<std::mutex> lock(mtx, std::defer_lock);  // 先不锁
+       // 做一些不需要锁的准备工作...
+       lock.lock();  // 手动加锁
+       // 临界区代码
+       lock.unlock();  // 可以提前解锁
+       // 做不需要锁的其他操作...
+   }  // 如果还锁着，析构时自动解锁
+   ```
+2. 手动控制
+`lock_guard`具备而`unique_lock`不具备的操作：
+- `lock()` 手动加锁
+- `unlock()` 手动解锁
+- `try_lock()` 尝试加锁，不阻塞
+- `owns_lock()` 检查是否持有锁
+- `release()` 释放所有权，不解锁
+
+    ```cpp
+    std::unique_lock<std::mutex> lock(mtx, std::try_to_lock);
+    if (lock.owns_lock()) {
+        // 成功拿到锁，处理临界区
+    } else {
+        // 没拿到锁，做其他事情，避免阻塞
+    }
+    ```
+3. 配合条件变量
+    `std::condition_variable::wait()` 必须传入 `unique_lock`，不能使用 `lock_guard`。
+    因为 `wait()` 需要在等待期间暂时释放锁，并在被唤醒后重新获取锁，这种"释放-等待-重新获取"的灵活操作只有 `unique_lock` 支持
+
+    ```cpp
+    std::condition_variable cv;
+    std::mutex mtx;
+    bool ready = false;
+
+    // 正确用法：unique_lock
+    std::unique_lock<std::mutex> lock(mtx);
+    cv.wait(lock, []{ return ready; });  // wait 内部会 unlock 再 lock
+
+    // 错误用法：lock_guard（编译报错）
+    // std::lock_guard<std::mutex> lock(mtx);
+    // cv.wait(lock, []{ return ready; });  // ❌ 编译错误！
+    ```
+
 ### `future`和`promise`
 future为异步结果接收端，用于获取未来准备的值
 promise为异步结果发送端，用于设置值
