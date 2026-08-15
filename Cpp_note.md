@@ -3561,6 +3561,18 @@ vector<bool> vb(1000);  // 特殊！不是存储 bool 数组
                         // 但数据仍在堆上
 ```
 
+STL容器`list`也有`emplace_back`和`emplace_front`方法，不要和LeetCode的**自定义struct**NodeList弄混
+
+**`front`,`back`,`begin`,`end`区分** 
+| 方法 | 返回类型 | 返回内容 | 是否可修改 |
+| :-- | :-- | :-- | :-- |
+| `front()` | 引用`T&` | 第一个元素的引用 | 可 |
+| `back()` | 引用`T&` | 最后个元素的引用 | 可 |
+| `begin()` | 迭代器`iterator` | 第一个元素的迭代器 | 可 |
+| `end()` | 迭代器`iterator` | 末尾迭代器，不指向元素 | 否 |
+| `cbegin()` | 常量迭代器`const_iterator` | 第一个元素的常量迭代器 | 否 |
+| `cend()` | 常量迭代器`const_iterator` | 指向末尾的常量迭代器| 否 |
+
 ### 容器遍历时插入
 #### vector
 - `push_back`一个元素后，`end`操作返回的迭代器肯定失效

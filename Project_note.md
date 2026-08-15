@@ -118,6 +118,27 @@ asio在Windows上使用Proactor，在Linux上，由于异步I/O接口不完善�
    | 6. 处理数据         |
 ```
 
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+sequenceDiagram
+    participant App
+    participant Kernel
+
+    App->>Kernel: 注册可读事件
+    activate Kernel
+    Note right of Kernel: 等待数据...
+    Kernel-->>App: 通知数据就绪
+    deactivate Kernel
+
+    App->>Kernel: read() 系统调用
+    activate Kernel
+    Note right of Kernel: 阻塞拷贝数据至用户区
+    Kernel-->>App: 返回读取结果
+    deactivate Kernel
+
+    Note left of App: 处理业务逻辑
+```
+
 **Proactor模式**
 ```txt
 应用程序                内核

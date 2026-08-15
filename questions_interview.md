@@ -1155,7 +1155,7 @@ MySql底层使用B+树：
 ### 进程有哪些状态、如何切换？
 ![进程状态](./Cpp_Picture/进程状态.jpg)
 - NULL->创建状态：一个新进程被创建时的第一个状态
-- 创建状态->就绪状态：进程被穿件和初始化后变为就绪
+- 创建状态->就绪状态：进程被创建和初始化后变为就绪
 - 就绪->运行：进程被操作系统进程调度器选中后分配给CPU正式运行进程
 - 运行->结束：进程运行完成或出错
 - 运行->就绪：进程在运行过程中，分配给它的时间片用完，操作系统将其置为就绪，从就绪态中选择其他进程运行
@@ -1477,3 +1477,129 @@ TCP 在刚建立连接完成后，首先进行慢启动。发送方每收到一�
 `42.68.24.0` → 24 = `00011000`
 
 ![题目](./Cpp_Picture/进程状态2.jpg)
+
+### 时间片是按照进程分配的吗？
+在Linux中：
+- 默认情况下，时间片按照线程分配(Linux内核调度器调度的是线程，而非进程)
+- 特殊情况下，可以设置进程组调度实现按进程分配时间片的效果
+
+### 移动语义是什么？它的实现原理是怎样的？如果类的移动构造delete掉会怎样？
+**移动语义：** 允许资源所有权从一个对象转移到另一个对象，而无需进行深拷贝
+```cpp
+// 传统拷贝：深拷贝（昂贵）
+string s1 = "Hello World";  // 分配内存
+string s2 = s1;             // 复制整个字符串（分配新内存）
+
+// 移动语义：浅拷贝 + 转移所有权（廉价）
+string s3 = std::move(s1);  // s1 的资源转移到 s3，s1 变为空
+// 只是指针赋值，没有分配新内存！
+```
+
+移动语义的核心：**右值引用`&&`**
+```cpp
+// 左值：有名字、可取地址
+int x = 10;          // x 是左值
+string s = "hello";  // s 是左值
+
+// 右值：临时对象、没有名字
+int y = 10 + 20;     // 10+20 是右值（临时结果）
+string s2 = s + "!"; // s+"!" 是右值（临时对象）
+
+// 右值引用：绑定到右值
+int&& rref = 10;                    // 绑定到临时 int
+string&& sref = string("temp");     // 绑定到临时 string
+```
+
+***示例***
+```cpp
+class MyString {
+private:
+    char* data;
+    size_t size;
+    
+public:
+    // 普通构造函数
+    MyString(const char* str) {
+        size = strlen(str);
+        data = new char[size + 1];
+        strcpy(data, str);
+        cout << "构造: " << data << endl;
+    }
+    
+    // 拷贝构造函数（深拷贝）
+    MyString(const MyString& other) {
+        size = other.size;
+        data = new char[size + 1];
+        strcpy(data, other.data);
+        cout << "拷贝构造: " << data << endl;
+    }
+    
+    // 移动构造函数（浅拷贝 + 窃取资源）⭐
+    MyString(MyString&& other) noexcept 
+        : data(other.data), size(other.size) {
+        other.data = nullptr;   // 源对象放弃所有权
+        other.size = 0;
+        cout << "移动构造: 资源已转移" << endl;
+    }
+    
+    // 析构函数
+    ~MyString() {
+        if (data) {
+            delete[] data;
+            cout << "析构: 释放资源" << endl;
+        }
+    }
+};
+```
+
+**如果移动构造被delete**
+1. 显式delete移动构造
+    ```cpp
+    class MyClass {
+    public:
+        MyClass() {}
+        
+        // 拷贝构造
+        MyClass(const MyClass& other) {
+            cout << "拷贝构造" << endl;
+        }
+        
+        // 移动构造被删除
+        MyClass(MyClass&&) = delete;
+    };
+
+    int main() {
+        MyClass a;
+        MyClass b = a;           // ✅ 拷贝构造（可用）
+        
+        MyClass c = std::move(a); // ❌ 错误！移动构造被 delete
+        // error: use of deleted function 'MyClass::MyClass(MyClass&&)'
+        
+        // 只能使用拷贝构造
+        MyClass d = a;           // ✅ 使用拷贝构造
+        
+        return 0;
+    }
+    ```
+2. 只有拷贝构造、没有移动构造
+    ```cpp
+    class MyClass {
+    public:
+        MyClass() {}
+        
+        // 只有拷贝构造
+        MyClass(const MyClass& other) {
+            cout << "拷贝构造" << endl;
+        }
+        // 编译器不会自动生成移动构造
+    };
+
+    int main() {
+        MyClass a;
+        MyClass b = std::move(a);  // ✅ 调用拷贝构造（回退）
+        // 即使有 std::move，因为没有移动构造，使用拷贝构造
+        cout << "使用拷贝构造作为后备" << endl;
+        
+        return 0;
+    }
+    ```
