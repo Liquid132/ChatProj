@@ -2498,7 +2498,7 @@ int main() {
 
 ---
 
-### **编译时多态、运行时多态**
+### 编译时多态、运行时多态
 
 - **编译时多态** 主要通过函数重载和模板实现
     编译器在编译时，就能算出要调用的具体是哪个函数，直接把地址写死在代码里
@@ -3356,6 +3356,90 @@ int main() {
     return 0;
 }
 ```
+
+**运算符重载补充说明**
+运算符重载的返回值类型取决于具体运算符的语义
+1. 赋值、下标、解引用等：返回引用
+    ```cpp
+    class MyClass {
+    private:
+        int data;
+        
+    public:
+        // ❌ 算术运算符：返回值（临时对象）
+        MyClass operator+(const MyClass& other) const {
+            MyClass result;
+            result.data = data + other.data;
+            return result;  // 返回临时对象
+        }
+        
+        // ❌ 比较运算符：返回 bool
+        bool operator==(const MyClass& other) const {
+            return data == other.data;
+        }
+        
+        // ❌ 逻辑运算符：返回 bool
+        bool operator!() const {
+            return data == 0;
+        }
+        
+        // ❌ 后缀递增/递减：返回值（旧值）
+        MyClass operator++(int) {  // obj++
+            MyClass old = *this;
+            ++data;
+            return old;  // 返回旧值（临时对象）
+        }
+    };
+
+    int main() {
+        MyClass a, b, c;
+        c = a + b;  // a+b 返回临时对象 ✅
+        // a + b = c;  // ❌ 错误！不能赋值给临时对象
+        
+        return 0;
+    }
+    ```
+2. 算术运算符、比较运算符、逻辑运算符通常返回值（临时对象）
+    ```cpp
+    class MyClass {
+    private:
+        int data;
+        
+    public:
+        // ❌ 算术运算符：返回值（临时对象）
+        MyClass operator+(const MyClass& other) const {
+            MyClass result;
+            result.data = data + other.data;
+            return result;  // 返回临时对象
+        }
+        
+        // ❌ 比较运算符：返回 bool
+        bool operator==(const MyClass& other) const {
+            return data == other.data;
+        }
+        
+        // ❌ 逻辑运算符：返回 bool
+        bool operator!() const {
+            return data == 0;
+        }
+        
+        // ❌ 后缀递增/递减：返回值（旧值）
+        MyClass operator++(int) {  // obj++
+            MyClass old = *this;
+            ++data;
+            return old;  // 返回旧值（临时对象）
+        }
+    };
+
+    int main() {
+        MyClass a, b, c;
+        c = a + b;  // a+b 返回临时对象 ✅
+        // a + b = c;  // ❌ 错误！不能赋值给临时对象
+        
+        return 0;
+    }
+    ```
+
 **函数模板和类模板**
 - 实例化方式：函数模板实例化由编译程序在处理函数调用时自动完成，类模板实例化需要在程序中显式指定
 - 默认参数：类模板在模板参数列表中可以有默认参数，函数模板在C++11后也支持
@@ -3647,6 +3731,54 @@ int main() {
     return 0;
 }
 ```
+**补充说明`advance`和`move_iterator`**
+`std::advance`,通用的迭代器前进函数
+```cpp
+#include <iterator>
+#include <vector>
+#include <iostream>
+using namespace std;
+
+int main() {
+    vector<int> vec = {1, 2, 3, 4, 5};
+    auto it = vec.begin();
+    
+    // advance：将迭代器向前移动 n 步
+    advance(it, 2);  // it 现在指向 3
+    cout << *it << endl;  // 输出 3
+    
+    // 可以向后移动（需要双向迭代器）
+    advance(it, -1);  // it 现在指向 2
+    cout << *it << endl;  // 输出 2
+    
+    return 0;
+}
+```
+`std::move_iterator`,迭代器适配器，将解引用操作转换为移动语义
+```cpp
+#include <iterator>
+#include <vector>
+#include <string>
+using namespace std;
+
+int main() {
+    vector<string> source = {"a", "b", "c", "d"};
+    vector<string> dest;
+    
+    // 创建移动迭代器
+    auto first = make_move_iterator(source.begin());
+    auto last = make_move_iterator(source.end());
+    
+    // 将元素移动到目标（移动构造，而非拷贝）
+    dest.insert(dest.end(), first, last);
+    
+    // source 的元素现在处于"空"状态
+    // 等价于：dest.emplace_back(std::move(source[0]));
+    
+    return 0;
+}
+```
+
 转移范围
 ```cpp
 #include <iostream>
@@ -5243,6 +5375,11 @@ GateServer
   - Reactor + ET：必须用非阻塞 I/O（否则最后一次 read 会阻塞住整个线程）
 
 asio在Windows上使用Proactor，在Linux上，由于异步I/O接口不完善，通常使用Reactor（epoll）模拟Proactor
+
+**epoll和IOCP**
+`epoll`是Linux内核提供的底层系统调用(API)。在Windows中与其最对等的内核级I/O模型是 I/O 完成端口（IOCP）
+- `epoll`为Reactor模式的就绪通知；`IOCP`为Proactor模式的完成通知
+- 项目中的`io_context`作为**跨平台库接口**， `epoll`和`IOCP`是其在不同操作系统中需要使用的底层工具
 
 **补充说明：边缘触发(ET)和水平触发(LT)**
 
