@@ -944,7 +944,7 @@ clear()函数并不会释放内存或将元素值设为零，而是将容器的�
 - 根节点必须为黑色
 - 所有叶节点(**NULL空节点，即空指针对应的哨兵节点**)都是黑色
 - 红色节点不能连续出现
-- 从任意节点到其叶子节点路径上的黑色节点数量相同
+- 从任意节点到其所有叶子节点路径上的黑色节点数量相同
 3. 为什么不选AVL而是红黑树？
 AVL（平衡二叉树）为一颗空树或者左右两个字数高度差绝对值不超过1，它的查找速度更快
 但是，AVL树插入、删除调整更多，旋转次数更多
@@ -1190,6 +1190,25 @@ TLB是CPU缓存虚拟地址到物理地址映射的“快表”。切换进程�
 - 运行->阻塞：进程请求某个时间且必须等待时，比如请求I/O事件
 - 阻塞->就绪：进程等待的时间完成
 
+进程运行时间片用完或者需要插入高优先级进程时：
+```text
+        进程A运行中
+            ↓
+    【时钟中断 / 高优先级进程就绪】
+            ↓
+    CPU保存A的上下文到PCB_A (保存寄存器、PC等)
+            ↓
+    A的状态 运行→就绪
+            ↓
+    将A放入就绪队列尾部
+            ↓
+    从就绪队列取出下一个进程B
+            ↓
+    从PCB_B恢复B的上下文 (恢复寄存器、PC等)
+            ↓
+        进程B开始运行
+```
+
 ### 什么是进程上下文、有哪些？
 各个进程之间是共享 CPU 资源的，在不同的时候进程之间需要切换，让不同的进程可以在 CPU 执行，那么这个一个进程切换到另一个进程运行，称为进程的上下文切换。
 
@@ -1206,7 +1225,9 @@ CPU 寄存器和程序计数是 CPU 在运行任何任务前，所必须依赖�
 - 不可剥夺条件：不可剥夺条件是指，当线程已经持有了资源 ，在自己使用完之前不能被其他线程获取，线程 B 如果也想使用此资源，则只能在线程 A 使用完并释放后才能获取。
 - 环路等待条件：环路等待条件指的是，在死锁发生的时候，两个线程获取资源的顺序构成了环形链。
 
-避免死锁最常见的并且可行的就是使用资源有序分配法。即线程 A 和 线程 B 获取资源的顺序要一样，当线程 A 是先尝试获取资源 A，然后尝试获取资源 B 的时候，线程 B 同样也是先尝试获取资源 A，然后尝试获取资源 B
+避免死锁的方法：
+- 使用 `std::lock()` 函数一次性锁定多个互斥量，它内部采用死锁避免算法（类似银行家算法，保证全部锁定或全部不锁）
+- 资源有序分配法。即线程 A 和 线程 B 获取资源的顺序要一样，当线程 A 是先尝试获取资源 A，然后尝试获取资源 B 的时候，线程 B 同样也是先尝试获取资源 A，然后尝试获取资源 B
 
 ### 共享内存是如何实现的？ 
 不同进程分别拿出一块虚拟内存，映射到相同的物理内存中。
@@ -1713,7 +1734,7 @@ public:
 
 ### `io_context`在单线程和多线程中分别是怎么工作的？
 *先介绍一下io_context*
-传统多线程基于**事件驱动**，为每个请求或任务创建一个新线程。线程是操作系统掉队掉队最小单位，创建、切换、销毁都需要内核参与，开销很大；
+传统多线程基于**事件驱动**，为每个请求或任务创建一个新线程。线程是操作系统调度最小单位，创建、切换、销毁都需要内核参与，开销很大；
 `io_context`基于事件驱动，使用少量线程(一般等于CPU核心数)监听大量I/O时间，当事件发生时，线程才处理对应回调函数。它可被视作I/O 事件管理 + Handler 调度。Handler是一个可调用对象，是当某个I/O事件发生时将会执行的代码
 ```txt
 传统多线程：像一家餐厅，来一桌客人就雇一个专职服务员（线程）。客人多了，服务员（线程）数量爆炸，管理混乱，成本极高。
@@ -1817,6 +1838,867 @@ io_context：编程模型是异步非阻塞的。你发起一个 async_read，�
 
 - 工厂模式
     工厂模式主要用于封装对象的创建过程,调用方不需要知道具体的派生类应该如何创建，只需要告诉工厂需要什么类型即可
+    1. 简单工厂
+        由一个工厂类根据传入参数，动态决定应该创建哪个产品类的实例
+    2. 工厂方法
+        定义一个用于创建对象的接口，让子类决定实例化哪个类。工厂方法使一个类的实例化延迟到其子类
+    3. 抽象工厂
+        提供一个接口用于创建相关或依赖对象的家族，而不明确指定具体类
 
-## 项目中遇到的难处总结
+```cpp
+class Character {
+protected:
+    std::string name;
+    int health;
+    int attack;
+    int magic;
+public:
+    Character(const std::string& n, int h, int a, int m) 
+        : name(n), health(h), attack(a), magic(m) {}
+
+    virtual ~Character() = default;
+
+    virtual void showInfo() const {
+        std::cout << "name:" << name << std::endl;
+        // 下略
+    }
+
+    virtual void specialSkill() = 0;
+
+    std:: string getName() const {return name;}
+};
+
+// 具体角色：战士(Warrior)，法师(Mage)，射手(Archer)等
+class Warrior : public Character {
+public :
+    Warror(const std::string& name) : Character(n:name, h:150, a:80, m:20) {};
+
+    void specialSkill() override {
+        std::cout << name << "使用【旋风斩】" << std::endl;
+    }
+
+    void showInfo() const override {
+        std::cout << "【战士】" << "name:" << name << std::endl;
+        // 下略
+    }
+}
+
+class Mage : public Character {}
+
+class Archer : public Character {}
+
+// 简单工厂
+// 1. 枚举每个角色
+enum class CharcaterType{
+    WARRIOR, 
+    MAGE, 
+    ARCHER,
+};
+
+// 2. 根据参数type传递角色名，使用switch语句枚举type
+class SimpleCharacterFactory {
+public:
+    static std::unique_ptr<Character>
+    CreateCharacter(CharacterType type, const std::string &name) {
+        switch(type) {
+            case CharacterType::WARRIOR:
+                return std::make_unique<Warrior>(name);
+            case CharacterTYpe::MAGE:
+                return std::make_unique<Mage>(name);
+            case CharacterTYpe::ARCHER:
+                return std::make_unique<Archer>(name);    
+            default:
+
+        }
+    }
+};
+
+/**
+* 简单工厂在扩充内容（比如增加角色时）比较麻烦
+* 工厂方法为角色生成一个抽象工厂类，依此实现实例化延迟到子类的效果
+*/
+
+// 工厂方法
+class CharacterFactory {
+public:
+    virtual ~CharacterFactory() = default;
+    // 不提供默认创建，将createCharacter抽象为纯虚函数->CharacterFactory无法实例化
+    virtual std::unique_ptr<Character> createCharacter(const std::string &name) = 0;
+    // 使用setupCharaceter创建角色
+    std::unique_ptr<Character> CreateCharacterWithSetup(const std::string &name) {
+        auto character = createCharacter(name);
+        setupCharaceter(character.get());
+        return character;
+    }
+protected:
+    virtual void setupCharaceter(Character* character) {
+        std::cout<< "角色" << character -> getName() << "创建完成，进行基础设置..." << std::endl;
+    }
+};
+
+class WarriorFactory : public CharacterFactory {
+public:
+    virtual std::unique_ptr<Character> createCharacter(const std::string &name) {
+        return std::make_unique<Warrior>(name);
+    } 
+protected:
+    virtual void setupCharaceter(Character* character) {
+        // 保留基类构造
+        CharacterFactory::setupCharaceter(character);
+        std::cout << "为战士配备腐化黑拥..." << std::endl;
+    }
+};
+
+// 法师等，略
+
+/**
+* 工厂方法先抽象基类，规范初始化方法(CreateCharacterWithSetup)，将初始化流程和角色创建流程交给子类去实现
+* 其中，子类属性各不相同的初始化抽象为纯虚函数(createCharacter);子类存在公共部分的则写进基类中(CharacterFactory::setupCharaceter)
+* 这样一来，如果需要添加爱其他子类，或单独子类需要扩充属性，不会对基类或其他子类产生影响
+* 简单工厂和工厂方法都是创建一个产品，而抽象工厂创造的是一个产品族 
+```
+
+### 线程池如何处理`thread_local`?
+1. 为什么需要线程池
+   复用已创建的线程资源，避免频繁进行线程的创建与销毁所带来的系统开销
+   核心参数：
+   核心线程数
+   最大线程数
+   非核心线程空闲存活时间
+   任务阻塞队列：用于缓存待处理的任务
+2. 什么是`thead_local`
+   `thread_local` 是C++语言的一个存储类说明符，告诉编译器：“这个变量在每个线程中都有一个独立的实例。”
+3. 线程池+`thread_local`
+   - 每个线程第一次访问该变量时，会创建一份独立的副本。
+   - 该副本的生命周期与线程绑定：线程销毁时，变量自动析构。
+   - 语法简洁，直接像全局变量一样使用，无需像Java那样通过 set/get 方法操作
+   - 编译器保证RAII，不会内存泄漏
+
+```cpp
+#include <iostream>
+#include <thread>
+
+thread_local int g_value = 0;  // 每个线程都有自己的 g_value 副本
+
+void foo() {
+    g_value++;  // 当前线程的副本 +1
+    std::cout << std::this_thread::get_id() << ": " << g_value << std::endl;
+}
+
+int main() {
+    std::thread t1(foo);
+    std::thread t2(foo);
+    t1.join();
+    t2.join();
+    // 输出：线程1打印1，线程2也打印1（各自独立）
+    return 0;
+}
+```
+
+### 介绍一下`static`和`const`的区别
+`const` 声明某个值的不可修改性
+- 定义常量
+- 修饰函数传参
+  ```cpp
+  void func(const string& str);
+  // 防止函数内修改该变量
+  ```
+- 修饰函数返回值
+  ```cpp
+  const string GetString();
+  // 防止返回值被修改(如 GetString() = "Mark";)
+  ```
+- 修饰指针
+  1. 常量指针(const T*), 不能通过指针修改该值，但是可以改变指针指向(底层const，指针指向常量)
+  2. 指针常量(T* const), 可以通过指针修改该值，但是不能修改指针指向(顶层const，指针自身为常量)
+   **this指针本身为一个指针常量，不能修改其指向**
+   **引用可以视为一个指针常量，声明时需要初始化，之后无法修改引用对象**
+- 修饰引用
+  ```cpp
+  int v3 = 90;
+  const int& rv3 = v3;
+  rv3 = 89;     // error
+  ```
+  无法通过引用修改该值 
+- 修饰成员函数
+  不能修改类对象成员变量，相当于修饰了成员函数中的隐藏的this指针
+  ```cpp
+  class AnyClass {
+    private:
+        int val;
+    public:
+        int GetVal() const {
+            // ... 不能修改val
+            return val;
+        }
+  };
+  ```
+  **对象本身并不存储this指针**，调用函数时将对象地址作为实参传递给this指针(相当于GetVal(this) {})，由寄存器进行传递
+
+`static`关键字用于修饰变量和函数
+- 静态成员变量
+  1. 属于类，与所有类对象共享，存储在全局数据区
+  2. 需要在类外定义才能分配存储空间，定义时可以忽略`protected`/`private`
+  3. 访问权限由类的public/protected/private决定
+- 静态成员函数
+  1. 不能直接访问非静态类成员函数和非静态类成员变量
+  2. 无需创建实例，可以通过类名调用(**静态函数没有this指针**)
+  3. 访问权限由类的public/protected/private决定
+```cpp
+#include <iostream>
+
+class Student {
+public:
+    // 静态成员变量（类级别，所有对象共享）
+    static int totalStudents;
+    
+    // 非静态成员变量（对象级别，每个对象独有）
+    std::string name;
+    int age;
+    
+    // 静态成员函数
+    static void showTotal() {
+        // 特性1：✅ 能访问静态成员
+        std::cout << "总学生数: " << totalStudents << std::endl;
+        
+        // 特性1：❌ 不能访问非静态成员
+        // std::cout << "姓名: " << name << std::endl;    // 编译错误！
+        // std::cout << "年龄: " << age << std::endl;     // 编译错误！
+        // printInfo();                                   // 编译错误！不能调用非静态函数
+    }
+    
+    // 非静态成员函数
+    void printInfo() {
+        std::cout << "姓名: " << name << ", 年龄: " << age << std::endl;
+    }
+    
+    // 构造函数
+    Student(const std::string& n, int a) : name(n), age(a) {
+        totalStudents++;  // 每创建一个学生，总数+1
+    }
+};
+
+// 静态成员变量必须在类外初始化
+int Student::totalStudents = 0;
+
+int main() {
+    // 特性2：无需创建实例，通过类名调用静态函数
+    Student::showTotal();  // 输出: 总学生数: 0
+    
+    // 创建两个对象
+    Student s1("小明", 18);
+    Student s2("小红", 19);
+    
+    // 再次通过类名调用静态函数
+    Student::showTotal();  // 输出: 总学生数: 2
+    
+    // ❌ 不能通过类名调用非静态函数
+    // Student::printInfo();  // 编译错误！
+    
+    // 非静态函数必须通过对象调用
+    s1.printInfo();  // 输出: 姓名: 小明, 年龄: 18
+    s2.printInfo();  // 输出: 姓名: 小红, 年龄: 19
+    
+    return 0;
+}
+```
+| 对比 | 静态成员变量 | 非静态成员函数 |
+| :-- | :-- | :-- |
+| 归属 | 类本身 | 对象 |
+| 调用方式 | 类名::函数名() | 对象.函数名() |
+| this指针 | 无 | 有 | 
+| 访问静态成员 | 能 | 能 |
+| 访问非静态成员 | 不能 | 能 |
+| 内存中 | 只有一份 | 逻辑上*每个对象一份 |
+
+*在代码区非静态成员函数只有一份机械码，但是内存的堆栈内存放对象数据，当对象调用函数时，编译器传入this指针，指向当前对象(每个对象调用函数操作的是自己的数据)
+
+### 虚拟内存是什么，操作系统是如何实现分配的？
+虚拟内存是一种内存管理技术，它让负担过重的操作系统 (OS) 能够创建一种合成的内存形式，从而超越自身的内存限制运行
+每个进程“看到”的地址范围相同，但是内容完全隔离；进程不知道物理内存的存在，认为自己独占所有资源
+1. 内核如何提供虚拟内存？
+   操作系统维护每个进程独立的页表，页表中记录了虚拟内存到物理页框的映射关系。虚拟内存分配分为如下两个阶段
+   1. 预留虚拟地址
+      - 应用程序调用 `malloc()` 或 `new` 申请内存时，操作系统只在虚拟地址空间中划出一块区域，标记为“已预留”。此时**没有分配物理内存**，只是修改了进程的虚拟内存区域的数据结构，记录这段地址的权限（读/写/执行）和映射方式（文件映射/匿名映射）
+   2. 按需分配
+      - 当程序真正读写这块虚拟地址时，CPU触发缺页中断，陷入内核
+      - 操作系统检查：
+        - 地址非法(访问未预留的区域)，触发`SIGSEGV`错误
+        - 地址合法单尚未映射物理页->从空闲物理页框列表中取出一页，在页表中建立虚拟页，使其成为物理页框的映射
+        - 如果该页之前被换出到磁盘，从磁盘读回物理内存
+2. 物理页框和虚拟页表
+   虚拟内存基本单元：
+   - 虚拟页（VP，Virtual Page）：虚拟地址空间被划分为固定大小的块（通常4KB）。
+   - 物理页框（PP，Page Frame）：物理内存被划分为同样大小的块（也是4KB）。
+   - 页表（Page Table）：存储VP到PP的映射关系，是每个进程独立的数据结构。页表不同->映射不同->内存隔离
+
+```text
+每个进程看到的虚拟地址空间（0 ~ 2^N）
+              ↓
+        [MMU + TLB]（硬件加速翻译）
+              ↓
+         查页表（内存中的数据结构，每进程独立）
+              ↓
+   ┌──────────┼──────────┐
+   ↓          ↓          ↓
+未分配    Valid=1     Valid=0
+(无物理页) (在物理内存) (在磁盘)
+              ↓          ↓
+         物理页框    Swap分区/文件
+         (真正运行)
+```
+
+3. 进程中的线程
+   - 进程隔离：进程A的页表中，虚拟地址0x1000指向物理页框#5；进程B的页表中，同一个虚拟地址0x1000指向物理页框#20。页表不同 → 映射不同 → 内存隔离。
+   - 线程共享：同一进程内的所有线程，共享同一个页表。因此，线程A和线程B访问虚拟地址0x1000时，MMU查的是同一张页表，映射到同一个物理页框#5。页表相同 → 看到同一块物理内存 → 自然共享。
+   - 线程的栈如何独立：线程栈是由操作系统内核直接分配的虚拟内存区域。主线程创建时，先得到进程的栈区作为自己的栈，后续子线程则在内存映射段进行分配
+![内存隔离](./Cpp_Picture/内存隔离.jpg)
+![内存布局](./Cpp_Picture/虚拟内存.jpg)
+
+### 进程间通信会用到什么技术？
+1. 管道
+2. 信号
+3. 消息队列
+   - 进程通过系统调用向消息队列发送/接收结构化的消息块
+   - 数据有边界，支持多对多通信，消息持久（队列独立于进程存在）
+4. 共享内存
+   - 多个进程将同一块物理内存区域映射到各自的虚拟地址空间，直接读写(速度快、危险)
+   - 需要配合信号量（Semaphore）或互斥锁（Mutex） 实现同步，以避免数据竞争
+5. 信号量
+6. 套接字(Socket)
+   - 支持同一台机器（Unix Domain Socket）和不同机器（TCP/IP Socket），信息通过字节流或数据报(SOCK_DGRAM)传递
+   - 最通用，支持网络通信
+   - 一般用于Web服务器与客户端、微服务RPC、本地进程间RPC(如Redis的Unix Socket连接)等
+7. 内存映射文件
+   - 共享内存的变体
+   - 将文件映射到进程的虚拟地址空间，多个进程映射同一文件实现共享
+
+### WebSocket和HTTP有什么区别？
+1. 五层网络模型
+   | 层级 | 协议 |
+   | :-- | :-- |
+   | 应用层 | HTTP、WebSocket、FTP、SMTP |
+   | 传输层 | TCP/UDP |
+   | 网络层 | IP |
+   | 链路层 | Ethernet |
+   | 物理层 | (网线、光纤) |
+   
+   `WebSocket`和`HTTP`均位于应用层
+2. 通信模型
+   - HTTP为**半双工无状态**的请求-响应协议。客户端发起请求，服务端返回响应，每次请求独立，服务端不记忆客户端
+   - WebSocket为**全双工持久连接**协议。客户端和服务端可以随时主动发送数据，一次握手建立持久连接，双方保持会话
+3. 数据帧格式
+   - HTTP/1.1 纯文本协议，头部是 ASCII 字符串，体可以是二进制（如图片），但头部开销大（通常几百字节）
+   - HTTP/2 二进制分帧，支持头部压缩（HPACK），但依然是请求-响应模型
+   - WebSocket 二进制帧协议，帧头仅 2~14 字节，开销极小。支持文本帧、二进制帧、ping/pong 心跳帧、关闭帧
+4. 连接
+   HTTP短连接
+   WebSocket长连接，直到任意一方主动关闭
+5. 性能
+   - HTTP/1.1 实时聊天场景，每个消息都要带几百字节的头部 → 开销巨大。
+   - WebSocket 每条消息只有 2~14 字节头部 → 适合高频小包通信
+
+### HTTP和HTTPS有什么区别？
+见上文
+
+### 子类C继承父类A、B(class C : public A, public B),它在构造和析构时会如何效用构造函数和析构函数？
+**调用构造函数**
+1. 调用虚基类构造函数
+2. 调用非基类构造函数，按照**继承声明顺序**(而不是初始化列表顺序)从左向右严格调用
+3. 调用成员对象构造函数
+4. 执行C自己的构造函数
+
+**调用析构函数**
+1. 执行C的析构函数体
+2. 析构成员对象(逆序)
+3. 析构基类，**按声明逆序**
+
+**如果构造函数没有显式调用父类构造会怎么样**
+编译器自动调用父类默认构造函数(无参构造)。如果父类只有有参构造函数，那么**必须**显示调用
+**程序员显式声明了任何构造函数（包括带参的、拷贝的、移动的），编译器就不再自动生成默认构造函数**
+`= delete` 的典型场景是：你想明确告诉编译器“我不希望这个函数被调用”，但编译器本来可能会隐式生成它
+1. 禁止拷贝构造、拷贝赋值
+    ```cpp
+    class Singleton {
+    public:
+        Singleton(const Singleton&) = delete;
+        Singleton& operator=(const Singleton&) = delete;
+    };
+    ```
+2. 强调“没有默认构造”,即使不加`= delete`也一样，只用于可读性说明
+    ```cpp
+    class A {
+    public:
+        A(int x) { }
+        A() = delete;   // 明确告诉读者：我不希望被默认构造
+    };
+    ```
+3. 阻止隐式转换
+    ```cpp
+    void f(int x) { }
+    void f(double) = delete;   // 禁止用double调用
+    ```
+
+
+```cpp
+class A {
+public:
+    A(int x) { cout << "A(int)" << endl; }
+};
+
+class C : public A {
+public:
+    // 错误！A没有默认构造
+    // C() { }  
+    
+    // 必须显式调用
+    C() : A(10) { }  
+};
+```
+
+**存在虚继承的情况**
+形如：
+```text
+     A
+    / \
+   B   C
+    \ /
+     D
+```
+的结构，class D : public B, public C.B、C都继承自A
+构造顺序变为：
+1. 构造虚基类 A（只构造一次，由最派生类 D 负责）。
+2. 再按声明顺序构造 B 和 C（但不再构造它们内部的 A 子对象）。
+3. 最后构造 D
+
+```text
+构造 A
+构造 B
+构造 C
+析构 C
+析构 B
+析构 A
+```
+
+**如果 C 的构造函数抛出异常，已经构造好的 A 和 B 会析构吗**
+会。C++保证完全构造好的子对象（基类或成员）会在异常传播时自动析构（栈展开机制）。但 C 自身的析构函数不会被调用，因为 C 还没有构造完成
+
+### 什么是临界区？
+临界区是一段访问共享资源(如全局变量、文件、数据库连接)的代码，这段代码在同一时刻只允许一个线程执行，否则会导致数据不一致或程序崩溃
+三要素：
+共享资源：多个线程需要访问的数据（如全局变量、队列、文件）
+竞争条件：多个线程同时进入临界区，导致数据错乱
+互斥访问：同一时刻只有一个线程能进入临界区，其他线程等待
+
+### 如何实现线程安全的单例模式?
+```cpp
+class Singleton {
+public:
+    static Singleton& getInstance() {
+        static Singleton instance; // 魔法在这里
+        return instance;
+    }
+    Singleton(const Singleton&) = delete;
+    Singleton& operator=(const Singleton&) = delete;
+private:
+    Singleton() = default;
+};
+```
+函数内的**静态局部变量的初始化是线程安全的**。编译器会在底层插入互斥机制，保证多个线程同时首次调用 getInstance() 时，只有一个线程执行构造，其余等待
+
+### 线程池:生产者-消费者模式
+- 构造：维护一个线程安全的队列实现连接复用
+- 析构
+  - 加锁
+  - 调用Close()函数通知等待线程退出等待
+  - 清空队列
+- 取连接
+  - 加锁
+  - 连接池为空，阻塞等待
+  - wait条件等待，连接池非空或者停止标志b_stop置位时唤醒
+- 还连接
+  - 加锁
+  - 如果连接池已经关闭，直接丢弃
+  - 没关的话讲连接放回连接池，唤醒一个线程
+```text
+时间线        线程A                          线程B
+T1          获取锁成功                       等待锁（阻塞）
+T2          检查队列：非空                   （等待）
+T3          pop 取出 Conn1                   （等待）
+T4          返回 Conn1，锁释放               获取锁成功
+T5          拿着 Conn1 去发请求（不持有锁）   检查队列：非空
+T6          发请求中...                      pop 取出 Conn2
+T7          发请求中...                      返回 Conn2，锁释放
+T8          发请求中...                      拿着 Conn2 去发请求
+```
+
+## 项目
+### 项目中遇到的难处总结
 1. Http在Cpp中基于TCP底层实现，不同于JAVA等，需要自己手动实现超时检测函数，在发送完数据后启动定时器检测超时。(HttpConnetion-ChekDeadline)
+2. 解读条件变量+互斥锁的生产者消费者逻辑(`LogicSystem::DealMsg()`)中`wait`方法的应用
+   ```cpp
+   while (_msg_que.empty() && !_b_stop) {
+        _consume.wait(unique_lk);
+    }
+   ```
+   核心作用：让工作线程在“没有消息可处理”时，**安全地休眠，不浪费CPU**
+   `_msg_que`（消息队列）是共享资源，会被多个线程同时访问：
+    - 生产者线程（网络I/O线程）：收到消息后，往队列里 push。
+    - 消费者线程（DealMsg 工作线程）：从队列里 pop 消息并处理
+    **对比：**
+   - 忙等：CPU占用100%，啥都没干
+   - sleep：消息在睡眠期间到达需要等待
+   - wait：线程真正挂起，消息到达立即唤醒，延迟低，不占CPU
+  **wait逻辑**
+  - 释放锁：把 `unique_lk` 持有的 `_mutex` 释放掉。这样生产者线程才能拿到锁，往队列里 push 消息。
+  - 挂起线程：当前线程进入睡眠状态，不再占用CPU，等待被 `notify_one()` 或 `notify_all()` 唤醒。
+  - 被唤醒后重新加锁：当生产者调用 `_consume.notify_one()` 时，工作线程被唤醒，重新尝试获取 `_mutex`。获取成功后，`wait` 返回，继续执行
+  **注意，释放锁和挂起是原子操作，中间不会被其他线程插入。这保证了不会错过任何通知**
+3. zanwu 
+
+### 聊天信息持久化怎么做？
+
+### 服务器掉线会怎样？
+
+### 连接池关闭时，为什么要唤醒所有线程？
+防止没被叫醒的线程会永远阻塞在wait上，导致程序无法退出。
+补充，等待线程全部结束后再析构的原因：防止工作中的线程访问已析构的成员变量会导致未定义行为
+
+### 下列代码会输出什么？
+```cpp
+#include <iostream>
+using namespace std;
+
+class A {
+public:
+    void func1() { cout << "A::func1" << endl; }
+    virtual void func2() { cout << "A::func2" << endl; }
+};
+
+class B : public A {
+public:
+    void func1() { cout << "B::func1" << endl; }
+    void func2() override { cout << "B::func2" << endl; }
+};
+
+int main() {
+    A* p = new B();  // 基类指针指向派生类对象（这是常见场景）
+    p->func1();
+    p->func2();
+    delete p;
+    return 0;
+}
+```
+| 函数 | 调用结果 | 说明 |
+| :-- | :-- | :-- |
+| `func1()` |	`A::func1` | 它是非虚函数，调用在**编译期**就确定了，编译器只看指针的**静态类型**（A*），所以直接调用 A 的版本。这叫静态绑定（早期绑定）。|
+| `func2`() |	`B::func2` | 它是虚函数，调用在**运行期**决定。p 指向的实际对象是 B，通过对象的虚函数表（vtable） 找到 B::func2 的地址并调用。这叫动态绑定（晚期绑定）。|
+
+因此输出应为:
+```text
+A::func1
+B::func2
+```
+图解：
+```text
+        指针 p (静态类型 A*)
+              ↓
+    ┌─────────────────┐
+    │  实际对象 (B)    │
+    │  ┌─────────────┐ │
+    │  │ vptr (虚指针)│ │────→ 指向 B 的虚函数表
+    │  ├─────────────┤ │      ┌──────────────┐
+    │  │  成员变量    │ │      │ &B::func2    │
+    │  └─────────────┘ │      └──────────────┘
+    └─────────────────┘
+```
+
+### `io_context`-`session`-`socket`辨析
+| 对象 | 本质 | 管什么 |
+| :-- | :-- | :-- |
+| `io_context` | 异步事件调度器 | 谁来等待事件、执行回调 |
+| `socket` | TCP 通信端点 | 谁和谁收发字节 |
+| `session` | 应用层会话对象 | 一条连接的协议、用户、缓存、发送队列和生命周期 |
+
+```text
+io_context
+└── 调度 socket 的异步读写、accept、定时器、信号回调
+socket
+└── 一条实际 TCP 连接的收发端点
+CSession
+└── 拥有一个 socket，并在其上实现协议解析、用户绑定和消息收发
+```
+
+1. `io_context`:异步事件循环与执行上下文
+  负责：
+  - 登记异步操作
+  - 等待网络、定时器、信号等事件
+  - 事件发生后执行回调
+  - 作为socket、acceptor、timer等Asio对象的执行上下文
+    ```text
+    在`AsioIOServicePool`中，主`io_context`负责接受新连接、处理信号；
+    I/O池中的`io_context`负责承载客户端连接的读写回调
+    ```
+2. `socket`:实际TCP通信端点
+   作为操作系统TCP套接字的C++封装，`socket`只关心(异步读写)：
+    ```text
+    建立连接
+    接收字节
+    发送字节
+    关闭连接
+    ```
+    而不对：
+    ```text
+    用户 uid；
+    登录 token；
+    好友关系；
+    JSON 业务字段；
+    消息队列；
+    Redis 在线状态。
+    ```
+    作反应
+    在`CSession`中：
+    ```cpp
+    tcp::socket _socket;
+    std::string _session_id;
+    char _data[MAX_LENGTH];
+    CServer* _server;
+    std::queue<shared_ptr<SendNode>> _send_que;
+    int _user_uid;
+    ```
+    只有`_socket`是底层网络端点，其余均为上层连接附加状态
+3. `CSession`: 一条连接的应用层会话,服务端用它管理客户端TCP长连接
+     1. 创建：每个``session`创建时生成UUID，给予连接一个`session_id`
+     2. 自定义协议拆包，方法略。`socket`收到字节流后由`CSession`将其还原为完整业务消息
+     3. 网络层业务层解耦: 读取完整消息后，`CSession`将其投递给`LogicSystem`(如此一来，网络I/O线程不必再直接执行Redis、MySQL、gRPC等业务逻辑)
+     4. 保存用户关联
+        ```text
+        CServer::sessions : session_id->CSession
+        UserMgr : uid->CSession
+        上述索引分别解决：
+        按连接管理和清理：session_id->session
+        按用户推送信息： uid->session
+        ```
+    5. 发送队列、顺序调控
+    6. 生命周期管理
+4. 协作关系
+   ```text
+   1. ChatServer 创建主 io_context
+   2. CServer 的 acceptor 绑定主 io_context
+   3. CServer 开始 async_accept
+   4. 每来一个新连接：
+      - 从 AsioIOServicePool 取一个 io_context
+      - 创建 CSession
+      - CSession 在构造时创建并绑定 socket
+      - acceptor 将客户端连接交给该 socket
+   5. CSession::Start() 发起异步读头
+   6. 所属 io_context 调度 socket 读写回调
+   7. CSession 组装完整消息
+   8. LogicSystem 处理业务
+   9. 业务调用 session->Send()
+   10. CSession 通过 socket 异步发送回客户端
+   ```
+5. 补充说明
+
+### 项目中的同步异步、并发模型、阻塞非阻塞整理
+1. 并发
+定义：逻辑上的“同时”处理多件事情。
+
+关键：**并发并不等于并行**。
+在单核CPU上，通过时间片轮转，让多个任务交替执行，宏观上看起来是“同时”进行，这叫并发；
+在多核CPU上，多个任务真正在同一时刻被执行，这叫并行。面试官最爱考这个区分。
+
+2. 阻塞与非阻塞
+定义：描述调用者在等待结果时，自身线程的状态。
+
+阻塞：调用结果返回之前，当前线程会被挂起，无法执行其他任务，直到收到结果。
+
+非阻塞：调用结果返回之前，调用者不会挂起，可以继续执行其他操作，通过轮询等方式检查结果是否就绪。
+
+3. 同步与异步
+定义：描述消息通知的机制。
+
+同步：调用者主动去等待/检查结果。当调用一个同步方法后，必须等到该方法返回结果才能继续往下走。
+
+异步：调用者不主动等待，而是告诉系统“结果出来了告诉我”，系统通过回调、事件、信号等方式通知调用者
+![同步阻塞](./Cpp_Picture/同步_异步_阻塞_非阻塞.jpg)
+
+调用者和线程的关系：
+调用者是**逻辑上的动作发起方**，线程是**物理上的执行载体**。一个线程可以扮演多个调用者，一个调用者也可以跨越多个线程
+1. 同步调用
+```cpp
+// 线程A调用 read()
+int n = read(fd, buf, size);
+```
+**调用者**：线程A（逻辑上发起读操作的人）
+**线程**：线程A（物理上执行读操作的载体）
+**关系**：调用者 = 线程。线程A发起调用，线程A等待结果，线程A拿到结果继续执行
+2. 异步调用
+```cpp
+// 线程A调用 async_read()
+socket.async_read_some(buffer, [](error_code ec, size_t len){
+    // 回调可能在另一个线程B执行
+});
+```
+**调用者**：线程A（逻辑上发起异步读操作）
+**线程**：线程A发起调用后立刻返回；回调可能在线程B执行。
+**关系**：调用者（线程A）≠ 执行者（线程B）。调用者和线程解绑了
+3. 多线程异步调用
+```cpp
+// 线程A发起异步操作，回调在I/O线程池的某个线程执行
+thread_pool.post([](){
+    // 这个lambda可能被线程池中的任意线程执行
+});
+```
+**调用者**：线程A（逻辑上发起任务）
+**线程**：线程池中的某个线程（物理上执行任务）
+**关系**：调用者是“委托方”，线程是“执行方”。调用者把任务委托给线程池，自己继续干别的
+
+### Node.js的await和C++的异步操作辨析
+```cpp
+let query_res = await redis_module.GetRedis(...);
+let send_res = await emailModule.SendMail(...);
+```
+**`await` 做了什么？**
+
+1. 调用 `GetRedis()`，返回一个 `Promise`（代表“未来会有结果”）。
+
+2. await 检查这个 `Promise` 是否已完成： 
+    - 如果已完成，直接取结果，继续往下走。
+    - 如果未完成，暂停当前 `async` 函数的执行，把控制权交还给事件循环。
+
+3. 事件循环继续处理其他任务（其他请求、定时器、I/O 事件）。
+
+4. 当 Redis 操作完成时，`Promise` 被 `resolve`，事件循环恢复这个 `async` 函数的执行，把结果赋给 `query_res`。
+
+5. 继续执行 `SendMail()`，同样的流程
+
+注意，`await`暂停的是这个 `async` 函数，不是整个线程。事件循环线程始终在跑
+
+**C++ 中异步操作完成后，回调如何通知调用者？**
+1. **回调函数**
+   ```cpp
+   void onRedisResult(RedisResult res) {
+        // Redis 操作完成后的处理
+        emailModule.SendMail(..., [](EmailResult res) {
+            // 邮件发送完成后的处理
+        });
+    }
+
+    redis_module.GetRedis(..., onRedisResult);  // 传入回调
+    ```
+    多层嵌套容易导致“回调地狱”（Callback Hell），代码可读性极差
+2. `std::future` / `std::promise`
+   ```cpp
+    std::future<int> fut = std::async(std::launch::async, [](){
+        return redis_module.GetRedis(...);
+    });
+
+    // 在另一个线程中等待结果
+    int result = fut.get();  // 阻塞等待
+   ```
+   `fut.get()` 是阻塞的，无法像 `await` 那样优雅地暂停函数并让出线程
+3. **C++20 协程（Coroutine）**
+   ```cpp
+    task<int> async_func() {
+        int query_res = co_await redis_module.GetRedis(...);  // 暂停协程，不阻塞线程
+        int send_res = co_await email_module.SendMail(...);   // 继续暂停/恢复
+        co_return query_res + send_res;
+    }
+   ```
+4. **Reactor 回调 + 事件循环** 最常用于C++后端
+   ```cpp
+    // 基于 epoll/io_context 的异步模型
+    socket.async_read_some(buffer, [](error_code ec, size_t len) {
+    // 数据到达后，io_context 调用这个回调
+    // 这个回调在 io_context 的事件循环线程中执行
+    });
+    ```
+    通知机制：
+   - 调用 `async_read_some` 时，注册回调并立即返回。
+   - `io_context.run()` 在事件循环中等待 `epoll` 事件。
+   - 数据到达时，`epoll` 返回，`io_context` 调用对应回调。
+   - 回调在事件循环线程中执行，处理数据
+
+### 什么是抽象，什么是封装，他们有什么区别？
+| 层次 | 抽象方式 | 例子 |
+| :-- | :-- | :-- |
+| 数据抽象 | 隐藏数据的具体表示 | std::vector 隐藏了底层数组指针和容量 | 
+| 行为抽象 | 隐藏算法的具体步骤 | std::sort 隐藏了排序算法 | 
+| 接口抽象 | 隐藏实现的具体类型 | Shape 隐藏了圆/矩形/三角形的差异 | 
+
+- **抽象**:隐藏细节，只暴露本质。设计一个 Shape 类，决定只暴露 area()——这是抽象。
+- **封装**:隐藏实现，只暴露接口。把 r_ 设为 private，不让外部直接访问——这是封装
+
+### 浅拷贝陷阱
+- **浅拷贝（Shallow Copy）**：只复制对象中的成员变量的值，如果成员是指针，就只复制指针的地址，不复制指针指向的内存。
+- **深拷贝（Deep Copy）**：不仅复制指针本身，还复制指针指向的内存内容，让两个对象各自拥有独立的资源
+```cpp
+class String {
+    char* data;   // 指针成员
+public:
+    String(const char* str) {
+        data = new char[strlen(str) + 1];
+        strcpy(data, str);
+    }
+    ~String() { delete[] data; }
+    // 没有自定义拷贝构造 → 编译器生成浅拷贝版本
+};
+```
+编译器自动生成拷贝构造函数：
+```cpp
+String(const String& other) {
+    data = other.data;   // 只复制指针地址！这就是浅拷贝
+}
+```
+```cpp
+String s1("hello");
+String s2(s1);
+// s2 先析构，释放了内存
+// 此时 s1.data 变成悬垂指针，指向已释放的内存
+cout << s1.data;   // 未定义行为，可能输出乱码或崩溃
+```
+离开作用域，先析构s2，再析构s1，双重释放
+
+**解决方法：三法则(C++11之后拓展为五法则，新包含移动构造、移动赋值)**：如果一个类需要自定义析构函数、拷贝构造函数、拷贝赋值运算符中的任何一个，那么它通常需要同时定义这三个
+```cpp
+class String {
+    char* data;
+public:
+    // 构造函数
+    String(const char* str = "") {
+        data = new char[strlen(str) + 1];
+        strcpy(data, str);
+    }
+
+    // 1. 拷贝构造函数（深拷贝）
+    String(const String& other) {
+        data = new char[strlen(other.data) + 1];
+        strcpy(data, other.data);
+    }
+
+    // 2. 拷贝赋值运算符（深拷贝 + 自赋值检查）
+    String& operator=(const String& other) {
+        if (this == &other) return *this;   // 防止自赋值
+        delete[] data;                       // 释放旧资源
+        data = new char[strlen(other.data) + 1];
+        strcpy(data, other.data);
+        return *this;
+    }
+
+    // 3. 析构函数
+    ~String() {
+        delete[] data;
+    }
+};
+```
+```cpp
+class String {
+public:
+    String(const String& other);              // 拷贝构造
+    String& operator=(const String& other);   // 拷贝赋值
+    String(String&& other) noexcept;          // 移动构造
+    String& operator=(String&& other) noexcept; // 移动赋值
+    ~String();                                 // 析构
+};
+```
