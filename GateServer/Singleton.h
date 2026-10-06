@@ -22,6 +22,7 @@ protected:
     static std::shared_ptr<T> _instance;
 public:
     static std::shared_ptr<T> GetInstance() {
+		// 静态once_flag用于确保初始化代码只执行一次
         static std::once_flag s_flag;
         std::call_once(s_flag, [&]() {
             _instance = std::shared_ptr<T>(new T);

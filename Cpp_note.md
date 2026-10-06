@@ -28,7 +28,7 @@
    |:-- |:-- |   
    | `virtual` | 虚函数，支持动态绑定 |
    | `override` | 显式声明重写基类虚函数，编译器检查 |
-   | `final` | 精致被继承或被虚函数重写 |
+   | `final` | 禁止被继承或被虚函数重写 |
    | `friend` | 声明友元 |
    | `explicit` | 禁止隐式转换，一般修饰构造函数或转换运算符 |
    | `this` | 指向当前对象的指针 |
@@ -56,6 +56,28 @@
    | `dynamic_cast` | 安全向下转型 |
 6. 其他
    `inline` 内联函数，C++17后可用于变量
+
+### 常用排序算法整理
+**快速排序**
+平均时间 O(nlogn)
+最坏时间 O(n^2)
+空间复杂度 O(logn)
+核心思想 分治+基准划分
+
+**堆排序**
+平均时间 O(nlogn)
+最坏时间 O(nlongn)
+空间复杂度 O(1)
+核心思想 建堆+取堆顶
+
+**归并排序**
+平均时间 O(nlongn)
+最坏时间 O(nlongn)
+空间复杂度 O(n)
+核心思想 分治+合并有序子序列
+
+**冒泡、插入**
+平均O(n^2),最好O(n),路边(bushi)
 
 ### 四种变量对比
 
@@ -189,7 +211,7 @@ typedef union
 {
     char c[10];
     double d;
-}u8;    // double 8字节，char 1字节，分配16字节空间
+}u8;    // d 8字节，c 10字节，分配16字节空间
 cout << sizeof(u8) << endl;     // 16
 
 typedef struct
@@ -1016,7 +1038,7 @@ delete p;
 
 **构造函数为什么不写作虚函数**
 
--空间角度
+- 空间角度
   - 虚函数对应一个vtable，此vtable存储在对象的内存空间中，如果构造函数是虚函数，需要通过vtable调用。
   - 可此时对象没有实例化，无法找到vtable
 - 使用角度
@@ -1363,6 +1385,35 @@ max<const char*> 明确指定这个特化是针对 const char* 类型的
 返回类型 const char* 也必须明确写出
 
 ---
+
+### 模板参数种类和用法
+
+类型参数(`typename T / class T`)
+- 传一个类型
+  
+非类型参数`(size_t N、int N、bool B)`	    
+- 传一个编译期常量值
+  
+模板模板参数`(template<typename> class C)`
+- 传一个模板本身
+
+类型参数：两种写法完全一致，class在此不为"类",只是历史写法
+```cpp
+    template<typename T>
+    T max(T a, T b) { return a > b ? a : b; }
+
+    template<class T, class U>      // 多个类型参数
+    void f(T t, U u);
+
+    template<typename T = int>      // 默认类型参数
+    struct Box { T value; };
+```
+
+非类型模板参数传递的是一个编译期常量而非类型(搜索template<size_t N>可以找到示例)
+```cpp
+```
+
+---
 ### sizeof && strlen
 ```cpp
 #include <iostream>
@@ -1400,6 +1451,7 @@ char arr[20];
 // 此时运行结果为20
 func(arr);
 ```
+`template<size_t N>`的作用：把数组的长度作为编译期常量捕获，使 `char (&arr)[N]` 保留真实数组类型、避免指针退化，从而在函数里能正确 `sizeof`、遍历、做编译期检查。`N` 由实参自动推导
 
 在上例中，arr作为C风格数组
 - 会退化
@@ -2361,7 +2413,7 @@ C++的编译过程经过了预处理、编译、汇编和链接四个主要阶�
     public:
         static int count;   // 类内声明
     };
-    int MyClass::count = 0; // 类外定义（必须！）
+    int MyClass::count = 0; // 类外定义
    ```
    - 类作用域，外部通过`MyClass::cout`访问
    - 所有MyClass对象共享一份`cout`(静态成员变量实体属于类而非对象)
@@ -2666,6 +2718,7 @@ public:
     void fun(float tmp);        // 重载 参数类型不同（相对于上一个函数）
     void fun(int tmp, float tmp1); // 重载 参数个数不同（相对于上一个函数）
     void fun(float tmp, int tmp1); // 重载 参数顺序不同（相对于上一个函数）
+    // 此处由于参数类型一样，发生重复定义
     int fun(int tmp);            // error: 'int A::fun(int)' cannot be overloaded 错误：注意重载不关心函数返回类型
 };
 ```
@@ -2735,8 +2788,46 @@ int main() {
 | :-- | :-- | :-- |
 | 函数签名 | 必须完全相同 | 可以不同（同名即可） |
 | 是否需要virtual | 基类需要声明virutal | 不需要 | 
-| 多态行为 | 支持（父类指针调用子类版本） | 不支持 |
+| 多态行为 | 支持（父类指针调用子类版本*） | 不支持 |
 | 作用域 | 子类替换父类实现 | 子类屏蔽父类**所有**同名函数 |
+
+辨析：父类调用子类函数是虚函数自身性质，通过虚表+虚指针实现，而与**CRTP**无关，后者(奇异递归模板)是为了实现避免虚函数开销的**静态多态**
+![辨析](./Cpp_Picture/虚函数表和CRTP.jpg)
+
+```cpp
+struct Base {
+    virtual void foo() { std::cout << "Base\n"; }
+    virtual ~Base() = default;
+};
+
+struct Derived : Base {
+    void foo() override { std::cout << "Derived\n"; }
+};
+
+void call(Base* p) {
+    p->foo();          // 编译期 p 是 Base*，运行期却调用 Derived::foo
+}
+
+int main() {
+    Derived d;
+    call(&d);          // 输出 Derived
+}
+```
+
+```text
+Base 对象:                 Derived 对象:
++--------+                 +--------+
+| vptr   | ---> Base表     | vptr   | ---> Derived表
++--------+                 +--------+
+                           | ...    |
+
+Base vtable:               Derived vtable:
+[0] &Base::foo             [0] &Derived::foo
+[1] &Base::~Base           [1] &Derived::~Derived
+```
+
+**编译期**：只知道"要调 vtable 第 0 项"，不知道具体地址。
+**运行期**：p 指向 Derived 对象 → vptr 指向 Derived 表 → 取到 Derived::foo
 
 ```cpp
 class Base {
@@ -3324,6 +3415,28 @@ int main()
 - 隐藏（Hide）：发生在名称查找层面，与虚函数表无关
 隐藏发生在非虚函数或同名但参数不同的情况下，是编译期的名称查找规则，与虚函数表无关。
 
+```cpp
+struct Base {
+    virtual void func()          { std::cout << "Base::func()\n"; }
+    virtual void func(int)       { std::cout << "Base::func(int)\n"; }
+    virtual void func(double)    { std::cout << "Base::func(double)\n"; }
+};
+
+struct Derived : Base {
+    void func() override { std::cout << "Derived::func()\n"; }   // 只重写无参版本
+};
+
+int main() {
+    Derived d;
+    d.func();        // ✅ Derived::func()  —— 重写生效
+    d.func(10);      // ❌ 编译错误！Base::func(int) 被隐藏了
+    d.func(3.14);    // ❌ 编译错误！Base::func(double) 被隐藏了
+}
+```
+Derived 的虚函数表里仍然有 3 个 func 条目（func()、func(int)、func(double)），只是第 0 项被替换成了 Derived::func()。
+名字隐藏是**编译期名字查找**层面的规则，它不改变虚函数表的内容。
+`d.func()`只在`Derived`作用域找到无参版本，即使 `vtable` 里有 `Base::func(int)`编译器也不会进行调用
+
 **多继承无虚函数覆盖**
 
 ```cpp
@@ -3419,7 +3532,11 @@ int main(){
 │      代码段 (Code/Text Segment) │ ← 所有函数的机器码（普通函数、成员函数、静态函数）
 └─────────────────────────────────┘ 低地址
 
+**虚拟内存**
 ![虚拟内存](./Cpp_Picture/虚拟内存.jpg)
+
+**内存分区**
+![内存分区](./Cpp_Picture/内存布局.jpg)
 
 在64位系统中，指针占用8字节，`int`类型为了保持兼容、效率，依然使用32位，即4字节。
 类的大小考虑其非静态成员变量的大小之和（考虑内存对齐），和系统位宽没有直接关系
@@ -4432,7 +4549,7 @@ int main() {
 # 内存管理
 
 ### 虚拟内存
-1. 虚拟内存可以使得进程对运行内存超过物理内存大小，因为程序运行符合局部性原理，CPU 访问内存会有很明显的重复访问的倾向性
+1. 虚拟内存可以使得进程的运行内存超过物理内存大小，因为程序运行符合局部性原理，CPU 访问内存会有很明显的重复访问的倾向性
    对于那些没有被经常使用到的内存，我们可以把它换出到物理内存之外，比如硬盘上的 swap 区域
 2. 每个进程都有自己的页表，所以每个进程的虚拟内存空间就是相互独立的
    这些页表是私有的，其他进程无法访问，以此解决多进程地址冲突问题
@@ -4525,7 +4642,7 @@ struct example {
 ### `malloc`和`new`
 | 区别 | `malloc` | `new` | 补充 |
 | :-- | :-- | :-- | :-- |
-|分配内存位置 | 堆上动态分配 | 自幼存储区动态分配 | 自由存储区的位置取决于`operator new`的实现,可以为堆、静态存储区 |
+|分配内存位置 | 堆上动态分配 | 自由存储区动态分配 | 自由存储区的位置取决于`operator new`的实现,可以为堆、静态存储区 |
 | 返回类型安全性 | 返回`void*`,需要强制类型转换为需要的类型 | 返回与对象类型匹配的指针类型 | `new`更符合类型安全 |
 | 内存分配失败 | 返回`NULL` | 抛异常`bad_alloc` |  |
 | 分配内存大小 | 需要显式指定 | 无需指定，编译器自行计算 |  |
@@ -5631,19 +5748,19 @@ TCP连接由四元组唯一标识，而非端口号。服务器端一个端口�
 ```
 
 ### 网络协议及其应用
-- **ICMP**互联网控制报文协议
+- **ICMP**互联网控制报文协议(网络层)
   - 网络层错误报告、诊断
   - 告知目标不可达、超时，或者用于`ping`等工具
-- **ARP**地址解析协议
+- **ARP**地址解析协议(链路层)
   - 用于将**IP地址**解析为**MAC地址**。同一局域网内，数据链路层（以太网）的通信依赖于 MAC 地址，而不是 IP 地址
   - ARP协议可以在局域网广播查询，获取目标MAC地址
 - **DNS**域名系统
   - 用于将人类易读的域名（如 www.360.com）转换为机器可读的IP地址
-- **TCP**传输控制协议
+- **TCP**传输控制协议(传输层)
   - 一种面向连接的、可靠的传输层协议，提供数据完整性和顺序性。常见的应用有 HTTP、HTTPS、FTP 等
-- **UDP**用户数据报协议
+- **UDP**用户数据报协议(传输层)
   - 一致种无连接的传输层协议，速度快开销小，常用于实时性高、允许少量丢包的应用，比如DNS查询
-- **IP**互联网协议
+- **IP**互联网协议(网络层)
   - 整个互联网的核心协议。负责将数据包从源地址发送到目标地址，其中最重要的功能是寻址（通过 IP 地址）和路由（选择数据包路径）
 
 *Internet网络层含有四个重要协议：IP、ICMP、ARP、UDP*
